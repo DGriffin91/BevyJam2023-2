@@ -17,3 +17,10 @@ opt-level = 3
 
 [dependencies]
 bevy = "0.12"
+bevy_mod_mesh_tools = { git = "https://github.com/DGriffin91/bevy_mod_mesh_tools" }
+bevy_basic_camera = { git = "https://github.com/DGriffin91/bevy_basic_camera" }
+bytemuck = "1.14.0"
+
+
+[features]
+file_watcher = ["bevy/file_watcher"]

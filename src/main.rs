@@ -2,29 +2,22 @@
 
 pub mod bind_group_utils;
 pub mod particles;
-
-use std::f32::consts::FRAC_PI_4;
+pub mod units;
 
 use bevy::{
-    core::cast_slice,
     core_pipeline::prepass::{DeferredPrepass, DepthPrepass},
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     math::*,
-    pbr::{CascadeShadowConfigBuilder, DefaultOpaqueRendererMethod, PbrPlugin},
+    pbr::{DefaultOpaqueRendererMethod, PbrPlugin},
     prelude::*,
-    render::{
-        mesh::Indices,
-        render_resource::{
-            AsBindGroup, Extent3d, PrimitiveTopology, ShaderRef, TextureDimension, TextureFormat,
-        },
-    },
-    window::PresentMode,
+    window::{PresentMode, PrimaryWindow},
 };
 use bevy_basic_camera::{CameraController, CameraControllerPlugin};
 use bevy_mod_taa::{TAABundle, TAAPlugin};
 use bevy_ridiculous_ssgi::{ssgi::SSGIPass, SSGIBundle, SSGIPlugin};
 use particles::{ParticleCommand, ParticlesPass, ParticlesPlugin};
 use shared_exponent_formats::{rgb9e5::vec3_to_rgb9e5, xyz8e5::vec3_to_xyz8e5};
+use units::{UnitCommand, UnitsPass, UnitsPlugin};
 
 fn main() {
     App::new()
@@ -51,14 +44,15 @@ fn main() {
         )
         .add_plugins((
             CameraControllerPlugin,
-            ParticlesPlugin,
+            //ParticlesPlugin,
+            UnitsPlugin,
             TAAPlugin,
             //SSGIPlugin,
             LogDiagnosticsPlugin::default(),
             FrameTimeDiagnosticsPlugin::default(),
         ))
         .add_systems(Startup, setup)
-        .add_systems(Update, restart_particle_system)
+        .add_systems(Update, (restart_particle_system, command_units))
         .run();
 }
 
@@ -67,20 +61,20 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    // circular base
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(shape::Circle::new(100.0).into()),
-        material: materials.add(Color::rgb(0.6, 0.6, 0.6).into()),
-        transform: Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
-        ..default()
-    });
-
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Cube { size: 2.0 })),
-        material: materials.add(Color::rgb(0.6, 0.6, 0.6).into()),
-        transform: Transform::from_xyz(0.0, 1.0, 0.0),
-        ..default()
-    });
+    //// circular base
+    //commands.spawn(PbrBundle {
+    //    mesh: meshes.add(shape::Circle::new(100.0).into()),
+    //    material: materials.add(Color::rgb(0.6, 0.6, 0.6).into()),
+    //    transform: Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
+    //    ..default()
+    //});
+    //
+    //commands.spawn(PbrBundle {
+    //    mesh: meshes.add(Mesh::from(shape::Cube { size: 2.0 })),
+    //    material: materials.add(Color::rgb(0.6, 0.6, 0.6).into()),
+    //    transform: Transform::from_xyz(0.0, 1.0, 0.0),
+    //    ..default()
+    //});
 
     // light
     //commands.spawn(DirectionalLightBundle {
@@ -107,14 +101,19 @@ fn setup(
                     hdr: true,
                     ..default()
                 },
-                transform: Transform::from_xyz(9.0, 3.0, 9.0).looking_at(Vec3::Y, Vec3::Y),
+                transform: Transform::from_xyz(0.0, 15.0, 0.0)
+                    .looking_at(vec3(12.8, 1.0, 12.8), Vec3::Y),
                 ..default()
             },
             ParticlesPass,
             DeferredPrepass,
             DepthPrepass,
+            UnitsPass,
         ))
-        .insert(CameraController::default())
+        .insert(CameraController {
+            mouse_key_enable_mouse: MouseButton::Right,
+            ..default()
+        })
         .insert(TAABundle::sample8())
         .insert(SSGIBundle {
             ssgi_pass: SSGIPass {
@@ -150,5 +149,61 @@ fn restart_particle_system(mut commands: Commands, mouse_button_input: Res<Input
             _webgl2_padding_1_: 0.0,
             _webgl2_padding_2_: 0.0,
         });
+    }
+}
+
+pub fn from_screenspace(
+    cursor_pos_screen: Vec2,
+    camera: &Camera,
+    camera_transform: &GlobalTransform,
+    window: &Window,
+) -> Option<Ray> {
+    let mut viewport_pos = cursor_pos_screen;
+    if let Some(viewport) = &camera.viewport {
+        viewport_pos -= viewport.physical_position.as_vec2() / window.scale_factor() as f32;
+    }
+    camera.viewport_to_world(camera_transform, viewport_pos)
+}
+
+fn ray_plane_intersection(ray: Ray, plane_point: Vec3, plane_normal: Vec3) -> Option<Vec3> {
+    let denominator = plane_normal.dot(ray.direction);
+    if denominator.abs() < 1e-6 {
+        return None; // Ray is parallel to the plane
+    }
+
+    let t = plane_normal.dot(plane_point - ray.origin) / denominator;
+    if t < 0.0 {
+        return None; // Intersection is behind the ray origin
+    }
+
+    Some(ray.origin + ray.direction * t)
+}
+
+fn command_units(
+    mouse_button_input: Res<Input<MouseButton>>,
+    window: Query<&Window, With<PrimaryWindow>>,
+    cameras: Query<(&Camera, &GlobalTransform)>,
+    mut unit_command: ResMut<UnitCommand>,
+) {
+    let window = window.get_single().unwrap();
+    if let Some((camera, transform)) = cameras.iter().next() {
+        if mouse_button_input.just_pressed(MouseButton::Left) {
+            let ray = window
+                .cursor_position()
+                .and_then(|cursor_pos| from_screenspace(cursor_pos, camera, transform, window));
+            if let Some(ray) = ray {
+                let intersection =
+                    ray_plane_intersection(ray, vec3(0.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0));
+                if let Some(intersection) = intersection {
+                    if intersection.x > 0.0 && intersection.z > 0.0 {
+                        unit_command.dest = uvec2(
+                            (intersection.x * 10.0) as u32,
+                            (intersection.z * 10.0) as u32,
+                        );
+                        unit_command.command = 1u32;
+                    }
+                }
+            }
+        }
     }
 }

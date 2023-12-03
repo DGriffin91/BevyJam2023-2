@@ -1,10 +1,15 @@
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
-use std::f32::consts::*;
+pub mod bind_group_utils;
+pub mod particles;
+
+use std::f32::consts::FRAC_PI_4;
 
 use bevy::{
     core::cast_slice,
+    core_pipeline::prepass::{DeferredPrepass, DepthPrepass},
     math::*,
+    pbr::{CascadeShadowConfigBuilder, DefaultOpaqueRendererMethod, PbrPlugin},
     prelude::*,
     render::{
         mesh::Indices,
@@ -14,13 +19,28 @@ use bevy::{
     },
 };
 use bevy_basic_camera::{CameraController, CameraControllerPlugin};
+use bevy_mod_taa::{TAABundle, TAAPlugin};
+use bevy_ridiculous_ssgi::{ssgi::SSGIPass, SSGIBundle, SSGIPlugin};
+use particles::{ParticlesPass, ParticlesPlugin};
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .insert_resource(Msaa::Off)
+        .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
+        .insert_resource(AmbientLight {
+            color: Color::rgb(1.0, 1.0, 1.0),
+            brightness: 0.0,
+        })
+        .insert_resource(DefaultOpaqueRendererMethod::deferred())
+        .add_plugins(DefaultPlugins.set(PbrPlugin {
+            add_default_deferred_lighting_plugin: false,
+            ..default()
+        }))
         .add_plugins((
             CameraControllerPlugin,
-            MaterialPlugin::<ParticlesMaterial>::default(),
+            ParticlesPlugin,
+            TAAPlugin,
+            SSGIPlugin,
         ))
         .add_systems(Startup, setup)
         .run();
@@ -29,71 +49,73 @@ fn main() {
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut images: ResMut<Assets<Image>>,
-    mut materials: ResMut<Assets<ParticlesMaterial>>,
-    asset_server: Res<AssetServer>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let indices = Indices::U32((0..1024 * 6).collect());
-    let mesh = Mesh::new(PrimitiveTopology::TriangleList).with_indices(Some(indices));
-
-    commands.spawn((MaterialMeshBundle {
-        mesh: meshes.add(mesh),
-        material: materials.add(ParticlesMaterial {
-            data_texture: images.add(create_texture()),
-        }),
-        transform: Transform::from_xyz(0.0, 0.0, 0.0),
+    // circular base
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(shape::Circle::new(100.0).into()),
+        material: materials.add(Color::rgb(0.6, 0.6, 0.6).into()),
+        transform: Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
         ..default()
-    },));
+    });
+
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::Cube { size: 2.0 })),
+        material: materials.add(Color::rgb(0.6, 0.6, 0.6).into()),
+        transform: Transform::from_xyz(0.0, 1.0, 0.0),
+        ..default()
+    });
+
+    // light
+    //commands.spawn(DirectionalLightBundle {
+    //    directional_light: DirectionalLight {
+    //        shadows_enabled: true,
+    //        illuminance: 100000.0,
+    //        ..default()
+    //    },
+    //    cascade_shadow_config: CascadeShadowConfigBuilder {
+    //        num_cascades: 2,
+    //        maximum_distance: 20.0,
+    //        ..default()
+    //    }
+    //    .into(),
+    //    transform: Transform::from_rotation(Quat::from_euler(EulerRot::ZYX, 0.0, 0.0, -FRAC_PI_4)),
+    //    ..default()
+    //});
 
     // camera
     commands
-        .spawn(Camera3dBundle {
-            transform: Transform::from_xyz(0.0, 0.0, 9.0).looking_at(Vec3::ZERO, Vec3::Y),
+        .spawn((
+            Camera3dBundle {
+                camera: Camera {
+                    hdr: true,
+                    ..default()
+                },
+                transform: Transform::from_xyz(9.0, 3.0, 9.0).looking_at(Vec3::Y, Vec3::Y),
+                ..default()
+            },
+            ParticlesPass,
+            DeferredPrepass,
+            DepthPrepass,
+        ))
+        .insert(CameraController::default())
+        .insert(TAABundle::sample8())
+        .insert(SSGIBundle {
+            ssgi_pass: SSGIPass {
+                brightness: 1.0,
+                square_falloff: true,
+                horizon_occlusion: 100.0,
+                render_scale: 4,
+                cascade_0_directions: 8,
+                interval_overlap: 0.1,
+                mip_min: 3.0,
+                mip_max: 4.0,
+                divide_steps_by_square_of_cascade_exp: false,
+                backside_illumination: 2.0,
+                rough_specular: 2.0,
+                rough_specular_sharpness: 2.0,
+                ..default()
+            },
             ..default()
-        })
-        .insert(CameraController::default());
-}
-
-/// The Material trait is very configurable, but comes with sensible defaults for all methods.
-/// You only need to implement functions for features that need non-default behavior. See the Material api docs for details!
-impl Material for ParticlesMaterial {
-    fn vertex_shader() -> ShaderRef {
-        "shaders/particles_material.wgsl".into()
-    }
-    fn fragment_shader() -> ShaderRef {
-        "shaders/particles_material.wgsl".into()
-    }
-}
-
-// This is the struct that will be passed to your shader
-#[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
-pub struct ParticlesMaterial {
-    #[texture(0)]
-    #[sampler(1)]
-    pub data_texture: Handle<Image>,
-}
-
-fn create_texture() -> Image {
-    let positions = [
-        vec4(0.0, 0.0, 0.0, 0.1),
-        vec4(0.5, 0.0, 0.0, 0.01),
-        vec4(0.0, 0.5, 0.0, 0.01),
-        vec4(0.0, 0.0, 0.5, 0.01),
-        vec4(-0.5, 0.0, 0.0, 0.01),
-        vec4(0.0, -0.5, 0.0, 0.01),
-        vec4(0.0, 0.0, -0.5, 0.01),
-    ];
-
-    let bytes: &[u8] = cast_slice(positions.as_slice());
-
-    Image::new(
-        Extent3d {
-            width: positions.len() as u32,
-            height: 1u32,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        bytes.to_vec(),
-        TextureFormat::Rgba32Float,
-    )
+        });
 }

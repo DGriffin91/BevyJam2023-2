@@ -2,14 +2,19 @@
 #import bevy_pbr::mesh_bindings
 #import bevy_render::instance_index::get_instance_index
 #import bevy_pbr::mesh_functions
+#import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
+#import "shaders/xyz8e5.wgsl"::{xyz8e5_to_vec3_, vec3_to_xyz8e5_}
+
+#import bevy_pbr::{
+    pbr_types::STANDARD_MATERIAL_FLAGS_UNLIT_BIT,
+    pbr_deferred_functions::deferred_gbuffer_from_pbr_input,
+}
+
 
 #import bevy_pbr::pbr_types
 #import bevy_pbr::utils::PI
 
-@group(1) @binding(0)
-var data_texture: texture_2d<f32>;
-@group(1) @binding(1)
-var texture_sampler: sampler;
+@group(0) @binding(101) var data_texture: texture_2d<f32>;
 
 struct VertexOutput {
     // this is `clip position` when the struct is used as a vertex stage output 
@@ -24,7 +29,7 @@ struct VertexOutput {
 #ifdef VERTEX_COLORS
     @location(4) color: vec4<f32>,
 #endif
-    @location(5) @interpolate(flat) instance_index: u32,
+    @location(5) velocity: vec4<f32>,
 }
 
 struct Vertex {
@@ -36,12 +41,17 @@ struct Vertex {
 fn vertex(vertex: Vertex) -> VertexOutput {
     var out: VertexOutput;
 
-    let data_index = vertex.index / 6u;
+    let dims = textureDimensions(data_texture).xy;
 
-    let data = textureLoad(data_texture, vec2<i32>(i32(data_index), 0i), 0);
+    let data_index = (vertex.index / 6u);
+    
+    let data_x = i32(data_index % dims.x);
+    let data_y = i32(data_index / dims.x);
+
+    let data = textureLoad(data_texture, vec2<i32>(data_x, data_y), 0);
 
     let center = data.xyz;
-    let size = data.w;
+    let size = 0.03;//data.w;
 
 
     let idx = vertex.index % 6u;
@@ -53,7 +63,6 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     ) * size;
 
 
-    var model = mesh_functions::get_model_matrix(vertex.instance_index);
 #ifdef LOCK_ROTATION
     let vertex_position = vec4<f32>(vert_pos.x, vert_pos.y, 0.0, 1.0);
     let position = view.view_proj * model * vertex_position;
@@ -70,24 +79,37 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 #endif
 
     out.position = position;
+    out.velocity = vec4(xyz8e5_to_vec3_(bitcast<u32>(data.w)), 1.0);
 
 
-
-
-    out.instance_index = get_instance_index(vertex.instance_index);
-#ifdef BASE_INSTANCE_WORKAROUND
-    // Hack: this ensures the push constant is always used, which works around this issue:
-    // https://github.com/bevyengine/bevy/issues/10509
-    // This can be removed when wgpu 0.19 is released
-    out.position.x += min(f32(get_instance_index(0u)), 0.0);
-#endif
     return out;
 }
 
-@fragment
-fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
-    //var N = normalize(in.world_normal);
-    //var V = normalize(view.world_position.xyz - in.world_position.xyz);
+struct FragmentOutput {
+    @location(0) deferred: vec4<u32>,
+    @location(1) deferred_lighting_pass_id: u32,
+}
 
-    return vec4(1.0, 0.0, 1.0, 1.0);
+@fragment
+fn fragment(in: VertexOutput) -> FragmentOutput {
+    var out: FragmentOutput;
+    var N = normalize(in.world_normal);
+    var V = normalize(view.world_position.xyz - in.world_position.xyz);
+
+    var pbr = pbr_input_new();
+    pbr.N = V;
+    pbr.material.flags |= STANDARD_MATERIAL_FLAGS_UNLIT_BIT;
+    
+    let color = mix(vec3(1.0, 0.0, 0.0) * 3.0, vec3(0.1, 0.2, 1.0) * 120.0, saturate(pow(length(in.velocity.xyz), 1.0) * 2.0));
+    pbr.material.base_color = vec4(color, 1.0);
+
+
+    out.deferred = deferred_gbuffer_from_pbr_input(pbr);
+    out.deferred_lighting_pass_id = 1u;
+
+    // TODO: use prev frame state texture?
+    // out.motion_vector = calculate_motion_vector(in.world_position, in.previous_world_position);
+
+
+    return out;
 }

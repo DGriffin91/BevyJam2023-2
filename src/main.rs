@@ -8,6 +8,7 @@ use std::f32::consts::FRAC_PI_4;
 use bevy::{
     core::cast_slice,
     core_pipeline::prepass::{DeferredPrepass, DepthPrepass},
+    diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     math::*,
     pbr::{CascadeShadowConfigBuilder, DefaultOpaqueRendererMethod, PbrPlugin},
     prelude::*,
@@ -17,11 +18,13 @@ use bevy::{
             AsBindGroup, Extent3d, PrimitiveTopology, ShaderRef, TextureDimension, TextureFormat,
         },
     },
+    window::PresentMode,
 };
 use bevy_basic_camera::{CameraController, CameraControllerPlugin};
 use bevy_mod_taa::{TAABundle, TAAPlugin};
 use bevy_ridiculous_ssgi::{ssgi::SSGIPass, SSGIBundle, SSGIPlugin};
-use particles::{ParticlesPass, ParticlesPlugin};
+use particles::{ParticleCommand, ParticlesPass, ParticlesPlugin};
+use shared_exponent_formats::{rgb9e5::vec3_to_rgb9e5, xyz8e5::vec3_to_xyz8e5};
 
 fn main() {
     App::new()
@@ -32,17 +35,30 @@ fn main() {
             brightness: 0.0,
         })
         .insert_resource(DefaultOpaqueRendererMethod::deferred())
-        .add_plugins(DefaultPlugins.set(PbrPlugin {
-            add_default_deferred_lighting_plugin: false,
-            ..default()
-        }))
+        .add_plugins(
+            DefaultPlugins
+                .set(PbrPlugin {
+                    add_default_deferred_lighting_plugin: true,
+                    ..default()
+                })
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        present_mode: PresentMode::AutoNoVsync,
+                        ..default()
+                    }),
+                    ..default()
+                }),
+        )
         .add_plugins((
             CameraControllerPlugin,
             ParticlesPlugin,
             TAAPlugin,
-            SSGIPlugin,
+            //SSGIPlugin,
+            LogDiagnosticsPlugin::default(),
+            FrameTimeDiagnosticsPlugin::default(),
         ))
         .add_systems(Startup, setup)
+        .add_systems(Update, restart_particle_system)
         .run();
 }
 
@@ -105,17 +121,34 @@ fn setup(
                 brightness: 1.0,
                 square_falloff: true,
                 horizon_occlusion: 100.0,
-                render_scale: 4,
+                render_scale: 6,
                 cascade_0_directions: 8,
                 interval_overlap: 0.1,
                 mip_min: 3.0,
                 mip_max: 4.0,
                 divide_steps_by_square_of_cascade_exp: false,
-                backside_illumination: 2.0,
-                rough_specular: 2.0,
-                rough_specular_sharpness: 2.0,
+                backside_illumination: 0.0,
+                rough_specular: 1.0,
+                rough_specular_sharpness: 1.0,
                 ..default()
             },
             ..default()
         });
+}
+
+fn restart_particle_system(mut commands: Commands, mouse_button_input: Res<Input<MouseButton>>) {
+    if mouse_button_input.just_pressed(MouseButton::Left) {
+        commands.spawn(ParticleCommand {
+            spawn_position: vec3(0.0, 10.0, 0.0),
+            spawn_spread: vec3_to_rgb9e5(vec3(2.0, 2.0, 2.0).into()),
+            velocity: vec3_to_xyz8e5(vec3(0.0, 0.01, 0.01).into()),
+            direction_random_spread: 0.8,
+            category: 0u32,
+            flags: 0u32,
+            color1_: 0u32,
+            color2_: 0u32,
+            _webgl2_padding_1_: 0.0,
+            _webgl2_padding_2_: 0.0,
+        });
+    }
 }

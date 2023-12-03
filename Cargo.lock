@@ -660,6 +660,7 @@ dependencies = [
  "bevy_mod_taa",
  "bevy_ridiculous_ssgi",
  "bytemuck",
+ "shared_exponent_formats",
 ]
 
 [[package]]
@@ -3344,6 +3345,11 @@ checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
 dependencies = [
  "lazy_static",
 ]
+
+[[package]]
+name = "shared_exponent_formats"
+version = "0.1.0"
+source = "git+https://github.com/DGriffin91/shared_exponent_formats#0bc593747201f121706491a4745451832086f5b0"
 
 [[package]]
 name = "shlex"

@@ -11,6 +11,7 @@ use bevy::{
     render::{
         camera::ExtractedCamera,
         extract_component::{ExtractComponent, ExtractComponentPlugin},
+        extract_resource::{ExtractResource, ExtractResourcePlugin},
         mesh::Indices,
         render_graph::{
             NodeRunError, RenderGraphApp, RenderGraphContext, ViewNode, ViewNodeRunner,
@@ -21,29 +22,79 @@ use bevy::{
             DepthBiasState, DepthStencilState, Extent3d, FragmentState, IndexFormat, LoadOp,
             MultisampleState, Operations, PipelineCache, PrimitiveState, RenderPassColorAttachment,
             RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipelineDescriptor,
-            StencilState, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
-            TextureViewDimension, VertexState,
+            ShaderType, StencilState, TextureDescriptor, TextureDimension, TextureFormat,
+            TextureUsages, TextureViewDimension, VertexState,
         },
         renderer::{RenderContext, RenderDevice},
         texture::{CachedTexture, TextureCache},
         view::{ExtractedView, ViewDepthTexture, ViewTarget, ViewUniformOffset},
-        Render, RenderApp, RenderSet,
+        Extract, Render, RenderApp, RenderSet,
     },
 };
 
-const PARTICLES_DATA_FORMAT: TextureFormat = TextureFormat::Rgba32Float;
-const PARTICLES_PASS_WIDTH: u32 = 32;
-const PARTICLES_PASS_HEIGHT: u32 = 32;
-
 use crate::bind_group_utils::{
-    ftexture_layout_entry, globals_binding, globals_layout_entry, view_binding, view_layout_entry,
+    ftexture_layout_entry, globals_binding, globals_layout_entry, uniform_buffer,
+    uniform_layout_entry, view_binding, view_layout_entry,
 };
+
+const PARTICLES_DATA_FORMAT: TextureFormat = TextureFormat::Rgba32Float;
+const PARTICLES_PASS_WIDTH: u32 = 256;
+const PARTICLES_PASS_HEIGHT: u32 = 128;
+
+#[derive(Component, Clone, ExtractComponent, Copy, ShaderType, Debug, Default)]
+pub struct ParticleCommand {
+    pub spawn_position: Vec3,
+    pub spawn_spread: u32, //rgb9e5
+    pub velocity: u32,     //xyz8e5
+    /// 0.0 for hemisphere, -1.0 for sphere
+    pub direction_random_spread: f32,
+    pub category: u32,
+    pub flags: u32,
+    pub color1_: u32, //rgb9e5
+    pub color2_: u32, //rgb9e5
+    pub _webgl2_padding_1_: f32,
+    pub _webgl2_padding_2_: f32,
+}
+
+#[derive(Resource, ExtractResource, Clone, Copy, ShaderType, Debug, Default)]
+struct ParticleCommands {
+    pub commands: [ParticleCommand; 12],
+}
+
+#[derive(Clone, Debug, Copy, Default, ShaderType)]
+struct ParticleSystem {
+    pub age: f32,
+    pub command_assignment: u32,
+    padding_1_: f32,
+    padding_2_: f32,
+}
+
+#[derive(Resource, ExtractResource, Clone, Copy, ShaderType, Debug)]
+struct ParticleSystems {
+    pub systems: [ParticleSystem; 128],
+}
+
+impl Default for ParticleSystems {
+    fn default() -> Self {
+        Self {
+            systems: [ParticleSystem::default(); 128],
+        }
+    }
+}
 
 pub struct ParticlesPlugin;
 
 impl Plugin for ParticlesPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(ExtractComponentPlugin::<ParticlesPass>::default());
+        app.add_systems(PostUpdate, queue_particle_commands)
+            .init_resource::<ParticleCommands>()
+            .init_resource::<ParticleSystems>()
+            .add_plugins((
+                ExtractResourcePlugin::<ParticleCommands>::default(),
+                ExtractResourcePlugin::<ParticleSystems>::default(),
+                ExtractComponentPlugin::<ParticlesPass>::default(),
+            ))
+            .add_plugins(ExtractComponentPlugin::<ParticleCommand>::default());
         let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;
         };
@@ -102,6 +153,8 @@ impl ViewNode for ParticlesNode {
         world: &World,
     ) -> Result<(), NodeRunError> {
         let particles_pipeline = world.resource::<ParticlesPipeline>();
+        let particle_commands = world.resource::<ParticleCommands>();
+        let particle_systems = world.resource::<ParticleSystems>();
 
         let pipeline_cache = world.resource::<PipelineCache>();
 
@@ -113,6 +166,15 @@ impl ViewNode for ParticlesNode {
         // ---------------------------------------
         // Particles Update
         // ---------------------------------------
+
+        let commands_uniform = uniform_buffer(
+            particle_commands,
+            render_context,
+            "Particle Commands Uniform",
+        );
+
+        let systems_uniform =
+            uniform_buffer(particle_systems, render_context, "Particle Systems Uniform");
 
         {
             let Some(pipeline) =
@@ -128,6 +190,8 @@ impl ViewNode for ParticlesNode {
                     (0, view_binding(world)),
                     (9, globals_binding(world)),
                     (101, &particles_data_texture.read.default_view),
+                    (102, commands_uniform.as_entire_binding()),
+                    (103, systems_uniform.as_entire_binding()),
                 )),
             );
 
@@ -163,6 +227,8 @@ impl ViewNode for ParticlesNode {
                     (0, view_binding(world)),
                     (9, globals_binding(world)),
                     (101, &particles_data_texture.write.default_view),
+                    (102, commands_uniform.as_entire_binding()),
+                    (103, systems_uniform.as_entire_binding()),
                 )),
             );
 
@@ -223,6 +289,8 @@ impl FromWorld for ParticlesPipeline {
                 view_layout_entry(0),
                 globals_layout_entry(9),
                 ftexture_layout_entry(101, TextureViewDimension::D2), // Prev Particle State
+                uniform_layout_entry(102, ParticleCommands::min_size()),
+                uniform_layout_entry(103, ParticleCommands::min_size()),
             ],
         });
 
@@ -232,6 +300,8 @@ impl FromWorld for ParticlesPipeline {
                 view_layout_entry(0),
                 globals_layout_entry(9),
                 ftexture_layout_entry(101, TextureViewDimension::D2), // Current Particle State
+                uniform_layout_entry(102, ParticleCommands::min_size()),
+                uniform_layout_entry(103, ParticleCommands::min_size()),
             ],
         });
         let shader = world
@@ -369,5 +439,43 @@ fn prepare_textures(
             }
         };
         commands.entity(entity).insert(textures);
+    }
+}
+
+fn queue_particle_commands(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut particle_commands: ResMut<ParticleCommands>,
+    particle_command_entites: Query<(Entity, &ParticleCommand)>,
+    mut particle_systems: ResMut<ParticleSystems>,
+) {
+    for system in &mut particle_systems.systems {
+        // Age systems
+        system.age += time.delta_seconds();
+        // Reset command indices from last frame
+        system.command_assignment = u32::MAX;
+    }
+    let mut new_cmd_iter = particle_command_entites.iter();
+    for (command_n, command) in particle_commands.commands.iter_mut().enumerate() {
+        let next = new_cmd_iter.next();
+        if let Some((entity, new_command)) = next {
+            *command = *new_command;
+            commands.entity(entity).despawn_recursive();
+            let mut oldest = 0;
+            let mut oldest_time = 0.0;
+            // TODO *very* inefficient
+            for (i, system) in particle_systems.systems.iter().enumerate() {
+                if system.age > oldest_time {
+                    oldest = i;
+                    oldest_time = system.age;
+                }
+            }
+            // Reset age and assign new command
+            particle_systems.systems[oldest].command_assignment = command_n as u32;
+            particle_systems.systems[oldest].age = 0.0;
+            dbg!(oldest, particle_systems.systems[oldest].command_assignment);
+        } else {
+            *command = ParticleCommand::default();
+        }
     }
 }

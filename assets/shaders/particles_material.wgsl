@@ -4,6 +4,8 @@
 #import bevy_pbr::mesh_functions
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
 #import "shaders/xyz8e5.wgsl"::{xyz8e5_to_vec3_, vec3_to_xyz8e5_}
+#import "shaders/particles_update.wgsl"::{ParticleCommand, ParticleSystem}
+#import "shaders/sampling.wgsl"::sampling
 
 #import bevy_pbr::{
     pbr_types::STANDARD_MATERIAL_FLAGS_UNLIT_BIT,
@@ -15,6 +17,8 @@
 #import bevy_pbr::utils::PI
 
 @group(0) @binding(101) var data_texture: texture_2d<f32>;
+@group(0) @binding(102) var<uniform> commands: array<ParticleCommand, 12u>;
+@group(0) @binding(103) var<uniform> systems: array<ParticleSystem, 128u>;
 
 struct VertexOutput {
     // this is `clip position` when the struct is used as a vertex stage output 
@@ -30,6 +34,8 @@ struct VertexOutput {
     @location(4) color: vec4<f32>,
 #endif
     @location(5) velocity: vec4<f32>,
+    @location(6) particle_index: u32,
+    @location(7) system_index: u32,
 }
 
 struct Vertex {
@@ -43,15 +49,17 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
     let dims = textureDimensions(data_texture).xy;
 
-    let data_index = (vertex.index / 6u);
+    out.particle_index = (vertex.index / 6u);
+
+    out.system_index = out.particle_index / 256u;
     
-    let data_x = i32(data_index % dims.x);
-    let data_y = i32(data_index / dims.x);
+    let data_x = i32(out.particle_index % dims.x);
+    let data_y = i32(out.particle_index / dims.x);
 
     let data = textureLoad(data_texture, vec2<i32>(data_x, data_y), 0);
 
     let center = data.xyz;
-    let size = 0.03;//data.w;
+    let size = 0.04;//data.w;
 
 
     let idx = vertex.index % 6u;
@@ -96,12 +104,14 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     var N = normalize(in.world_normal);
     var V = normalize(view.world_position.xyz - in.world_position.xyz);
 
+    let system = systems[in.system_index];
+
     var pbr = pbr_input_new();
     pbr.N = V;
     pbr.material.flags |= STANDARD_MATERIAL_FLAGS_UNLIT_BIT;
     
     let color = mix(vec3(1.0, 0.0, 0.0) * 3.0, vec3(0.1, 0.2, 1.0) * 120.0, saturate(pow(length(in.velocity.xyz), 1.0) * 2.0));
-    pbr.material.base_color = vec4(color, 1.0);
+    pbr.material.base_color = vec4(color / system.age, 1.0);
 
 
     out.deferred = deferred_gbuffer_from_pbr_input(pbr);

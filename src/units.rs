@@ -1,9 +1,8 @@
 use bevy::{
     core::FrameCount,
     core_pipeline::{
-        core_3d::{self, CORE_3D_DEPTH_FORMAT},
+        core_3d::{self},
         deferred::{DEFERRED_LIGHTING_PASS_ID_FORMAT, DEFERRED_PREPASS_FORMAT},
-        fullscreen_vertex_shader::fullscreen_shader_vertex_state,
         prepass::ViewPrepassTextures,
     },
     ecs::query::QueryItem,
@@ -17,12 +16,8 @@ use bevy::{
         },
         render_resource::{
             BindGroupEntries, BindGroupLayout, BindGroupLayoutDescriptor, CachedRenderPipelineId,
-            ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState,
-            Extent3d, FragmentState, LoadOp, MultisampleState, Operations, PipelineCache,
-            PrimitiveState, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
-            RenderPassDescriptor, RenderPipelineDescriptor, ShaderType, StencilState,
-            TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
-            TextureViewDimension, VertexState,
+            Extent3d, PipelineCache, RenderPassDescriptor, ShaderType, TextureDescriptor,
+            TextureDimension, TextureFormat, TextureUsages, TextureViewDimension,
         },
         renderer::{RenderContext, RenderDevice},
         texture::{CachedTexture, TextureCache},
@@ -33,8 +28,10 @@ use bevy::{
 
 use crate::{
     bind_group_utils::{
-        globals_binding, globals_layout_entry, uniform_buffer, uniform_layout_entry,
-        utexture_layout_entry, view_binding, view_layout_entry,
+        basic_fullscreen_tri_pipeline, basic_opaque_pipeline, globals_binding,
+        globals_layout_entry, load_color_attachment, load_depth_attachment, opaque_target,
+        uniform_buffer, uniform_layout_entry, utexture_layout_entry, view_binding,
+        view_layout_entry,
     },
     shader_def_uint,
 };
@@ -159,16 +156,8 @@ impl ViewNode for UnitsNode {
             let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
                 label: Some("Units Evaluate"),
                 color_attachments: &[
-                    Some(RenderPassColorAttachment {
-                        view: &unit_data_texture.b.default_view,
-                        resolve_target: None,
-                        ops: Operations::default(),
-                    }),
-                    Some(RenderPassColorAttachment {
-                        view: &unit_data_texture.attack_a.default_view,
-                        resolve_target: None,
-                        ops: Operations::default(),
-                    }),
+                    load_color_attachment(&unit_data_texture.b.default_view),
+                    load_color_attachment(&unit_data_texture.attack_a.default_view),
                 ],
                 depth_stencil_attachment: None,
             });
@@ -206,11 +195,7 @@ impl ViewNode for UnitsNode {
 
             let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
                 label: Some("Units Update"),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &unit_data_texture.a.default_view,
-                    resolve_target: None,
-                    ops: Operations::default(),
-                })],
+                color_attachments: &[load_color_attachment(&unit_data_texture.a.default_view)],
                 depth_stencil_attachment: None,
             });
 
@@ -244,31 +229,10 @@ impl ViewNode for UnitsNode {
             let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
                 label: Some("Units Draw"),
                 color_attachments: &[
-                    Some(RenderPassColorAttachment {
-                        view: &gbuffer.default_view,
-                        resolve_target: None,
-                        ops: Operations {
-                            load: LoadOp::Load,
-                            store: true,
-                        },
-                    }),
-                    Some(RenderPassColorAttachment {
-                        view: &lighting_pass_id.default_view,
-                        resolve_target: None,
-                        ops: Operations {
-                            load: LoadOp::Load,
-                            store: true,
-                        },
-                    }),
+                    load_color_attachment(&gbuffer.default_view),
+                    load_color_attachment(&lighting_pass_id.default_view),
                 ],
-                depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                    view: &depth.view,
-                    depth_ops: Some(Operations {
-                        load: LoadOp::Load,
-                        store: true,
-                    }),
-                    stencil_ops: None,
-                }),
+                depth_stencil_attachment: load_depth_attachment(&depth.view),
             });
 
             // DRAW UNITS
@@ -309,8 +273,8 @@ impl FromWorld for UnitPipeline {
 
         let render_device = world.resource::<RenderDevice>();
 
-        let evaluate_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: Some("unit_evaluate_bind_group_layout"),
+        let layout_descriptor = &BindGroupLayoutDescriptor {
+            label: Some("unit_bind_group_layout"),
             entries: &[
                 view_layout_entry(0),
                 globals_layout_entry(9),
@@ -318,156 +282,56 @@ impl FromWorld for UnitPipeline {
                 uniform_layout_entry(102, UnitCommand::min_size()),
                 utexture_layout_entry(103, TextureViewDimension::D2), // Prev Attack data
             ],
-        });
-
-        let update_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: Some("unit_update_bind_group_layout"),
-            entries: &[
-                view_layout_entry(0),
-                globals_layout_entry(9),
-                utexture_layout_entry(101, TextureViewDimension::D2), // Prev Particle State
-                uniform_layout_entry(102, UnitCommand::min_size()),
-                utexture_layout_entry(103, TextureViewDimension::D2), // Attack data
-            ],
-        });
-
-        let draw_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: Some("unit_draw_bind_group_layout"),
-            entries: &[
-                view_layout_entry(0),
-                globals_layout_entry(9),
-                utexture_layout_entry(101, TextureViewDimension::D2), // Current Particle State
-                uniform_layout_entry(102, UnitCommand::min_size()),
-                utexture_layout_entry(103, TextureViewDimension::D2), // Attack data
-            ],
-        });
-        let shader = world
-            .resource::<AssetServer>()
-            .load("shaders/unit_evaluate.wgsl");
-
-        let evaluate_pipeline_id =
-            world
-                .resource_mut::<PipelineCache>()
-                .queue_render_pipeline(RenderPipelineDescriptor {
-                    label: Some("unit_evaluate_pipeline".into()),
-                    layout: vec![evaluate_layout.clone()],
-
-                    vertex: fullscreen_shader_vertex_state(),
-                    fragment: Some(FragmentState {
-                        shader: shader.clone(),
-                        shader_defs: shader_defs.clone(),
-
-                        entry_point: "fragment".into(),
-                        targets: vec![
-                            Some(ColorTargetState {
-                                format: UNITS_DATA_FORMAT,
-                                blend: None,
-                                write_mask: ColorWrites::ALL,
-                            }),
-                            Some(ColorTargetState {
-                                format: UNITS_ATTACK_FORMAT,
-                                blend: None,
-                                write_mask: ColorWrites::ALL,
-                            }),
-                        ],
-                    }),
-
-                    primitive: PrimitiveState::default(),
-                    depth_stencil: None,
-                    multisample: MultisampleState::default(),
-                    push_constant_ranges: vec![],
-                });
-
-        let shader = world
-            .resource::<AssetServer>()
-            .load("shaders/unit_update.wgsl");
-
-        let update_pipeline_id =
-            world
-                .resource_mut::<PipelineCache>()
-                .queue_render_pipeline(RenderPipelineDescriptor {
-                    label: Some("unit_update_pipeline".into()),
-                    layout: vec![update_layout.clone()],
-
-                    vertex: fullscreen_shader_vertex_state(),
-                    fragment: Some(FragmentState {
-                        shader: shader.clone(),
-                        shader_defs: shader_defs.clone(),
-
-                        entry_point: "fragment".into(),
-                        targets: vec![Some(ColorTargetState {
-                            format: UNITS_DATA_FORMAT,
-                            blend: None,
-                            write_mask: ColorWrites::ALL,
-                        })],
-                    }),
-
-                    primitive: PrimitiveState::default(),
-                    depth_stencil: None,
-                    multisample: MultisampleState::default(),
-                    push_constant_ranges: vec![],
-                });
-
-        let shader = world
-            .resource::<AssetServer>()
-            .load("shaders/unit_material.wgsl");
-
-        let mut draw_pipline_desc = RenderPipelineDescriptor {
-            label: Some("unit_draw_pipeline".into()),
-            layout: vec![draw_layout.clone()],
-
-            vertex: VertexState {
-                shader: shader.clone(),
-                shader_defs: shader_defs.clone(),
-                entry_point: "vertex".into(),
-                buffers: Vec::new(),
-            },
-            fragment: Some(FragmentState {
-                shader: shader.clone(),
-                shader_defs: shader_defs.clone(),
-
-                entry_point: "fragment".into(),
-                targets: vec![
-                    Some(ColorTargetState {
-                        format: DEFERRED_PREPASS_FORMAT,
-                        blend: None,
-                        write_mask: ColorWrites::ALL,
-                    }),
-                    Some(ColorTargetState {
-                        format: DEFERRED_LIGHTING_PASS_ID_FORMAT,
-                        blend: None,
-                        write_mask: ColorWrites::ALL,
-                    }),
-                ],
-            }),
-
-            primitive: PrimitiveState::default(),
-            depth_stencil: Some(DepthStencilState {
-                format: CORE_3D_DEPTH_FORMAT,
-                depth_write_enabled: true,
-                depth_compare: CompareFunction::GreaterEqual,
-                stencil: StencilState::default(),
-                bias: DepthBiasState::default(),
-            }),
-            multisample: MultisampleState::default(),
-            push_constant_ranges: vec![],
         };
 
-        let draw_pipeline_id = world
-            .resource_mut::<PipelineCache>()
-            .queue_render_pipeline(draw_pipline_desc.clone());
+        let evaluate_layout = render_device.create_bind_group_layout(layout_descriptor);
+        let update_layout = render_device.create_bind_group_layout(layout_descriptor);
+        let draw_layout = render_device.create_bind_group_layout(layout_descriptor);
 
-        let shader = world
-            .resource::<AssetServer>()
-            .load("shaders/unit_projectile_material.wgsl");
-        draw_pipline_desc.label = Some("unit_projectile_draw_pipeline".into());
-        draw_pipline_desc.vertex.shader = shader.clone();
-        if let Some(frag) = draw_pipline_desc.fragment.as_mut() {
-            frag.shader = shader;
-        }
-        let draw_projectiles_pipeline_id = world
-            .resource_mut::<PipelineCache>()
-            .queue_render_pipeline(draw_pipline_desc);
+        let evaluate_pipeline_id = basic_fullscreen_tri_pipeline(
+            "unit_evaluate_pipeline",
+            "shaders/unit_evaluate.wgsl",
+            world,
+            &evaluate_layout,
+            shader_defs.clone(),
+            vec![
+                opaque_target(UNITS_DATA_FORMAT),
+                opaque_target(UNITS_ATTACK_FORMAT),
+            ],
+        );
+
+        let update_pipeline_id = basic_fullscreen_tri_pipeline(
+            "unit_update_pipeline",
+            "shaders/unit_update.wgsl",
+            world,
+            &update_layout,
+            shader_defs.clone(),
+            vec![opaque_target(UNITS_DATA_FORMAT)],
+        );
+
+        let draw_pipeline_id = basic_opaque_pipeline(
+            "unit_draw_pipeline",
+            "shaders/unit_material.wgsl",
+            world,
+            &draw_layout,
+            shader_defs.clone(),
+            vec![
+                opaque_target(DEFERRED_PREPASS_FORMAT),
+                opaque_target(DEFERRED_LIGHTING_PASS_ID_FORMAT),
+            ],
+        );
+
+        let draw_projectiles_pipeline_id = basic_opaque_pipeline(
+            "unit_projectile_draw_pipeline",
+            "shaders/unit_projectile_material.wgsl",
+            world,
+            &draw_layout,
+            shader_defs,
+            vec![
+                opaque_target(DEFERRED_PREPASS_FORMAT),
+                opaque_target(DEFERRED_LIGHTING_PASS_ID_FORMAT),
+            ],
+        );
 
         Self {
             draw_layout,

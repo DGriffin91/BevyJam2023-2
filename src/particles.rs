@@ -1,9 +1,8 @@
 use bevy::{
     core::FrameCount,
     core_pipeline::{
-        core_3d::{self, CORE_3D_DEPTH_FORMAT},
+        core_3d::{self},
         deferred::{DEFERRED_LIGHTING_PASS_ID_FORMAT, DEFERRED_PREPASS_FORMAT},
-        fullscreen_vertex_shader::fullscreen_shader_vertex_state,
         prepass::ViewPrepassTextures,
     },
     ecs::query::QueryItem,
@@ -17,12 +16,8 @@ use bevy::{
         },
         render_resource::{
             BindGroupEntries, BindGroupLayout, BindGroupLayoutDescriptor, CachedRenderPipelineId,
-            ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState,
-            Extent3d, FragmentState, LoadOp, MultisampleState, Operations, PipelineCache,
-            PrimitiveState, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
-            RenderPassDescriptor, RenderPipelineDescriptor, ShaderType, StencilState,
-            TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
-            TextureViewDimension, VertexState,
+            Extent3d, PipelineCache, RenderPassDescriptor, ShaderType, TextureDescriptor,
+            TextureDimension, TextureFormat, TextureUsages, TextureViewDimension,
         },
         renderer::{RenderContext, RenderDevice},
         texture::{CachedTexture, TextureCache},
@@ -32,8 +27,9 @@ use bevy::{
 };
 
 use crate::bind_group_utils::{
-    ftexture_layout_entry, globals_binding, globals_layout_entry, uniform_buffer,
-    uniform_layout_entry, view_binding, view_layout_entry,
+    basic_fullscreen_tri_pipeline, basic_opaque_pipeline, ftexture_layout_entry, globals_binding,
+    globals_layout_entry, load_color_attachment, load_depth_attachment, opaque_target,
+    uniform_buffer, uniform_layout_entry, view_binding, view_layout_entry,
 };
 
 const PARTICLES_DATA_FORMAT: TextureFormat = TextureFormat::Rgba32Float;
@@ -196,11 +192,9 @@ impl ViewNode for ParticlesNode {
 
             let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
                 label: Some("particles_pass"),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &particles_data_texture.write.default_view,
-                    resolve_target: None,
-                    ops: Operations::default(),
-                })],
+                color_attachments: &[load_color_attachment(
+                    &particles_data_texture.write.default_view,
+                )],
                 depth_stencil_attachment: None,
             });
 
@@ -232,33 +226,12 @@ impl ViewNode for ParticlesNode {
             );
 
             let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
-                label: Some("particles_pass"),
+                label: Some("Particles Draw"),
                 color_attachments: &[
-                    Some(RenderPassColorAttachment {
-                        view: &gbuffer.default_view,
-                        resolve_target: None,
-                        ops: Operations {
-                            load: LoadOp::Load,
-                            store: true,
-                        },
-                    }),
-                    Some(RenderPassColorAttachment {
-                        view: &lighting_pass_id.default_view,
-                        resolve_target: None,
-                        ops: Operations {
-                            load: LoadOp::Load,
-                            store: true,
-                        },
-                    }),
+                    load_color_attachment(&gbuffer.default_view),
+                    load_color_attachment(&lighting_pass_id.default_view),
                 ],
-                depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                    view: &depth.view,
-                    depth_ops: Some(Operations {
-                        load: LoadOp::Load,
-                        store: true,
-                    }),
-                    stencil_ops: None,
-                }),
+                depth_stencil_attachment: load_depth_attachment(&depth.view),
             });
 
             render_pass.set_render_pipeline(pipeline);
@@ -303,83 +276,27 @@ impl FromWorld for ParticlesPipeline {
                 uniform_layout_entry(103, ParticleCommands::min_size()),
             ],
         });
-        let shader = world
-            .resource::<AssetServer>()
-            .load("shaders/particles_update.wgsl");
 
-        let update_pipeline_id =
-            world
-                .resource_mut::<PipelineCache>()
-                .queue_render_pipeline(RenderPipelineDescriptor {
-                    label: Some("particles_update_pipeline".into()),
-                    layout: vec![update_layout.clone()],
+        let update_pipeline_id = basic_fullscreen_tri_pipeline(
+            "particles_update_pipeline",
+            "shaders/particles_update.wgsl",
+            world,
+            &update_layout.clone(),
+            vec![],
+            vec![opaque_target(PARTICLES_DATA_FORMAT)],
+        );
 
-                    vertex: fullscreen_shader_vertex_state(),
-                    fragment: Some(FragmentState {
-                        shader: shader.clone(),
-                        shader_defs: vec![],
-
-                        entry_point: "fragment".into(),
-                        targets: vec![Some(ColorTargetState {
-                            format: PARTICLES_DATA_FORMAT,
-                            blend: None,
-                            write_mask: ColorWrites::ALL,
-                        })],
-                    }),
-
-                    primitive: PrimitiveState::default(),
-                    depth_stencil: None,
-                    multisample: MultisampleState::default(),
-                    push_constant_ranges: vec![],
-                });
-
-        let shader = world
-            .resource::<AssetServer>()
-            .load("shaders/particles_material.wgsl");
-
-        let draw_pipeline_id =
-            world
-                .resource_mut::<PipelineCache>()
-                .queue_render_pipeline(RenderPipelineDescriptor {
-                    label: Some("particles_draw_pipeline".into()),
-                    layout: vec![draw_layout.clone()],
-
-                    vertex: VertexState {
-                        shader: shader.clone(),
-                        shader_defs: Vec::new(),
-                        entry_point: "vertex".into(),
-                        buffers: Vec::new(),
-                    },
-                    fragment: Some(FragmentState {
-                        shader: shader.clone(),
-                        shader_defs: vec![],
-
-                        entry_point: "fragment".into(),
-                        targets: vec![
-                            Some(ColorTargetState {
-                                format: DEFERRED_PREPASS_FORMAT,
-                                blend: None,
-                                write_mask: ColorWrites::ALL,
-                            }),
-                            Some(ColorTargetState {
-                                format: DEFERRED_LIGHTING_PASS_ID_FORMAT,
-                                blend: None,
-                                write_mask: ColorWrites::ALL,
-                            }),
-                        ],
-                    }),
-
-                    primitive: PrimitiveState::default(),
-                    depth_stencil: Some(DepthStencilState {
-                        format: CORE_3D_DEPTH_FORMAT,
-                        depth_write_enabled: true,
-                        depth_compare: CompareFunction::GreaterEqual,
-                        stencil: StencilState::default(),
-                        bias: DepthBiasState::default(),
-                    }),
-                    multisample: MultisampleState::default(),
-                    push_constant_ranges: vec![],
-                });
+        let draw_pipeline_id = basic_opaque_pipeline(
+            "particles_draw_pipeline",
+            "shaders/particles_material.wgsl",
+            world,
+            &draw_layout,
+            vec![],
+            vec![
+                opaque_target(DEFERRED_PREPASS_FORMAT),
+                opaque_target(DEFERRED_LIGHTING_PASS_ID_FORMAT),
+            ],
+        );
 
         Self {
             draw_layout,

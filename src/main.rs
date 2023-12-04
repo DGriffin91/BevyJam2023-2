@@ -53,7 +53,7 @@ fn main() {
         )
         .add_plugins((
             CameraControllerPlugin,
-            //ParticlesPlugin,
+            ParticlesPlugin,
             UnitsPlugin,
             TAAPlugin,
             MinimapPlugin,

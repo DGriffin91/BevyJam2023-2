@@ -1,8 +1,5 @@
 use bevy::{
-    core_pipeline::{
-        core_3d::{self},
-        fullscreen_vertex_shader::fullscreen_shader_vertex_state,
-    },
+    core_pipeline::core_3d::{self},
     ecs::query::QueryItem,
     prelude::*,
     render::{
@@ -13,10 +10,8 @@ use bevy::{
         },
         render_resource::{
             BindGroupEntries, BindGroupLayout, BindGroupLayoutDescriptor, CachedRenderPipelineId,
-            ColorTargetState, ColorWrites, Extent3d, FragmentState, MultisampleState, Operations,
-            PipelineCache, PrimitiveState, RenderPassColorAttachment, RenderPassDescriptor,
-            RenderPipelineDescriptor, TextureDescriptor, TextureDimension, TextureFormat,
-            TextureUsages, TextureViewDimension,
+            Extent3d, PipelineCache, RenderPassDescriptor, TextureDescriptor, TextureDimension,
+            TextureFormat, TextureUsages, TextureViewDimension,
         },
         renderer::{RenderContext, RenderDevice},
         texture::{CachedTexture, TextureCache},
@@ -27,7 +22,8 @@ use bevy::{
 
 use crate::{
     bind_group_utils::{
-        globals_binding, globals_layout_entry, utexture_layout_entry, view_binding,
+        basic_fullscreen_tri_pipeline, globals_binding, globals_layout_entry,
+        load_color_attachment, opaque_target, utexture_layout_entry, view_binding,
         view_layout_entry,
     },
     shader_def_uint,
@@ -98,7 +94,6 @@ impl ViewNode for MinimapNode {
         world: &World,
     ) -> Result<(), NodeRunError> {
         let unit_pipeline = world.resource::<MinimapPipeline>();
-
         let pipeline_cache = world.resource::<PipelineCache>();
 
         // ---------------------------------------
@@ -125,11 +120,7 @@ impl ViewNode for MinimapNode {
 
             let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
                 label: Some("unit_pass"),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &minimap_textures.a.default_view,
-                    resolve_target: None,
-                    ops: Operations::default(),
-                })],
+                color_attachments: &[load_color_attachment(&minimap_textures.a.default_view)],
                 depth_stencil_attachment: None,
             });
 
@@ -167,35 +158,14 @@ impl FromWorld for MinimapPipeline {
             ],
         });
 
-        let shader = world
-            .resource::<AssetServer>()
-            .load("shaders/minimap_update.wgsl");
-
-        let update_pipeline_id =
-            world
-                .resource_mut::<PipelineCache>()
-                .queue_render_pipeline(RenderPipelineDescriptor {
-                    label: Some("unit_update_pipeline".into()),
-                    layout: vec![update_layout.clone()],
-
-                    vertex: fullscreen_shader_vertex_state(),
-                    fragment: Some(FragmentState {
-                        shader: shader.clone(),
-                        shader_defs: shader_defs.clone(),
-
-                        entry_point: "fragment".into(),
-                        targets: vec![Some(ColorTargetState {
-                            format: MINIMAP_DATA_FORMAT,
-                            blend: None,
-                            write_mask: ColorWrites::ALL,
-                        })],
-                    }),
-
-                    primitive: PrimitiveState::default(),
-                    depth_stencil: None,
-                    multisample: MultisampleState::default(),
-                    push_constant_ranges: vec![],
-                });
+        let update_pipeline_id = basic_fullscreen_tri_pipeline(
+            "minimap_update_pipeline",
+            "shaders/minimap_update.wgsl",
+            world,
+            &update_layout,
+            shader_defs.clone(),
+            vec![opaque_target(MINIMAP_DATA_FORMAT)],
+        );
 
         Self {
             update_layout,

@@ -45,9 +45,8 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
 
                 let other_data = textureLoad(data_texture, read_coord, 0);
                 var other_unit = unpack_unit(other_data);
-                if other_unit.mode == eval::UNIT_MODE_MOVE && other_unit.health > 0u && all(read_coord + other_unit.step_dir == ifrag_coord) {
-                    // If we just moved we now become idle so we can possibily find another unit to attack in evaluate
-                    other_unit.mode = eval::UNIT_MODE_IDLE;
+                if other_unit.mode == eval::UNIT_MODE_MOVE && other_unit.health > 0u && all(read_coord + other_unit.step_dir == ifrag_coord) && other_unit.progress == 0.0 {
+                    other_unit.mode = eval::UNIT_MODE_MOVEING;
                     return pack_unit(other_unit);
                 }
             }
@@ -77,7 +76,6 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
         }
     }
 
-    unit.mode = eval::UNIT_MODE_IDLE;
 
     return pack_unit(unit);
 }

@@ -5,6 +5,7 @@
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
 #import "shaders/xyz8e5.wgsl"::{xyz8e5_to_vec3_, vec3_to_xyz8e5_}
 #import "shaders/unit_evaluate.wgsl"::{UnitCommand, unpack_unit, pack_unit}
+#import "shaders/unit_evaluate.wgsl" as eval
 #import "shaders/sampling.wgsl"::sampling
 
 #import bevy_pbr::{
@@ -62,7 +63,15 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         // discard;?
     }
 
-    let center = vec3(f32(data_x), 0.5, f32(data_y));
+    
+
+    var center = vec3(f32(data_x), 0.5, f32(data_y));
+
+    if unit.mode == eval::UNIT_MODE_MOVEING {
+        let prev = vec3(f32(data_x - unit.step_dir.x), 0.5, f32(data_y - unit.step_dir.y));
+        center = mix(prev, center, saturate(unit.progress));
+    }
+
     //let center = vec3(2.0, 2.0, 0.0);
 
     let idx = vertex.index % 6u;

@@ -43,8 +43,8 @@ fn pack_2x16_(v: vec2<u32>) -> u32 {
 
 fn sign2i(n: vec2<i32>) -> vec2<i32> {
     return vec2(
-        select(-1, 1, n.x >= 0),
-        select(-1, 1, n.y >= 0),
+        select(select(-1, 1, n.x > 0), 0, n.x == 0),
+        select(select(-1, 1, n.y > 0), 0, n.y == 0),
     );
 }
 
@@ -67,14 +67,19 @@ struct Unit {
 
 const UNIT_MODE_IDLE: u32 = 0u;
 const UNIT_MODE_MOVE: u32 = 1u;
-const UNIT_MODE_ATTACK: u32 = 2u;
+const UNIT_MODE_MOVEING: u32 = 2u;
+const UNIT_MODE_ATTACK: u32 = 3u;
+
+const SPEED_MOVE: f32 = 5.0;
+const SPEED_ATTACK: f32 = 5.0;
 
 
 fn unpack_unit(data: vec4<u32>) -> Unit {
     var unit: Unit;
     unit.progress = bitcast<f32>(data.x);
     let d = unpack_4x8_(data.y);
-    unit.step_dir = vec2<i32>(vec2(d.x, d.y)) - 1; // Could be smaller
+    unit.step_dir = vec2<i32>(unpack_2x4_from_8(d.x)) - 1;
+    // d.y is spare
     unit.health = d.z;
     let mode_team = unpack_2x4_from_8(d.w);
     unit.mode = mode_team.x; 
@@ -88,8 +93,11 @@ fn pack_unit(unit: Unit) -> vec4<u32> {
     return vec4<u32>(
         bitcast<u32>(unit.progress),
         pack_4x8_(vec4(
-                u32(unit.step_dir.x + 1), 
-                u32(unit.step_dir.y + 1), 
+                pack_2x4_to_8(vec2(
+                    u32(unit.step_dir.x + 1),
+                    u32(unit.step_dir.y + 1), 
+                )), 
+                0u, //spare
                 unit.health, 
                 pack_2x4_to_8(vec2(unit.mode, unit.team)),
         )),
@@ -120,6 +128,19 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
     let data = textureLoad(data_texture, ifrag_coord, 0);
     var unit = unpack_unit(data);
 
+    if unit.progress >= 1.0 {
+        unit.mode = UNIT_MODE_IDLE;
+    }
+
+    
+    var step_mult = 0.0;
+    if unit.mode == UNIT_MODE_MOVEING {
+        step_mult = SPEED_MOVE;
+    } else if unit.mode == UNIT_MODE_ATTACK {
+        step_mult = SPEED_ATTACK;
+    }
+    unit.progress += globals.delta_time * step_mult;
+
     // if there is living unit in this cell check if it moved to another cell last frame
     if unit.health != 0u {
         for (var x = -1; x <= 1; x += 1) {
@@ -143,7 +164,7 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
     
     let rng = sampling::hash_noise(ufrag_coord, globals.frame_count + 3498u);
     if in.uv.y < 0.2 || in.uv.y > 0.8 {
-        if unit.health == 0u && rng > 0.99999 {
+        if unit.health == 0u && rng > 0.999999 {
             // Random spawn
             unit = unpack_unit(vec4(0u));
             unit.health = 255u;
@@ -163,7 +184,7 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
         return out;
     }
 
-    if unit.mode == UNIT_MODE_IDLE || unit.mode == UNIT_MODE_ATTACK {
+    if unit.mode == UNIT_MODE_IDLE {
         // First check if the unit we were shooting at is still there and use that one first otherwise find a new one
         let prev_attack_data = textureLoad(prev_attack, ifrag_coord, 0);
         let prev_attack_vector = vec2<i32>(prev_attack_data.xy) - #{ATTACK_RADIUS};
@@ -174,6 +195,7 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
         if other_unit.id != unit.id && other_unit.health != 0u && other_unit.team > 0u && unit.team != other_unit.team {
             out.attack_data = prev_attack_data;
             unit.mode = UNIT_MODE_ATTACK;
+            unit.progress = 0.0;
         } else {
             let noise = vec2(
                 sampling::hash_noise(ufrag_coord, globals.frame_count + 45623u),
@@ -189,6 +211,7 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
             if other_unit.id != unit.id && other_unit.health > 0u && other_unit.team > 0u && unit.team != other_unit.team {
                 out.attack_data = vec4(vec2<u32>(attack_offset + #{ATTACK_RADIUS}), attack_damage, 0u);
                 unit.mode = UNIT_MODE_ATTACK;
+                unit.progress = 0.0;
             }
         }
     }
@@ -197,10 +220,7 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
         unit.dest = command.dest;
     }
 
-    if (unit.mode == UNIT_MODE_IDLE || unit.mode == UNIT_MODE_MOVE) && any(ufrag_coord != unit.dest) {
-        unit.progress += globals.delta_time;
-
-
+    if unit.mode == UNIT_MODE_IDLE || unit.mode == UNIT_MODE_MOVE && !all(ufrag_coord == unit.dest) {
         let f_to_dest = vec2<f32>(unit.dest) - vec2<f32>(ufrag_coord);
 
         var dir_noise = vec2(0.0);
@@ -210,12 +230,14 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
         ) * 2.0 - 1.0;
         dir_noise *= length(f_to_dest);
 
-        unit.step_dir = sign2i(vec2<i32>((f_to_dest + dir_noise)));
-        unit.mode = UNIT_MODE_MOVE;
-        out.attack_data = vec4(0u);
+        let step_dir = sign2i(vec2<i32>(f_to_dest + dir_noise));
+        if !all(step_dir == vec2(0)) {
+            unit.step_dir = step_dir;
+            unit.mode = UNIT_MODE_MOVE;
+            out.attack_data = vec4(0u);
+            unit.progress = 0.0;
+        }
     }
-
-
 
     
     out.unit_data = pack_unit(unit);

@@ -6,7 +6,10 @@ pub mod units;
 
 use bevy::{
     asset::AssetMetaCheck,
-    core_pipeline::prepass::{DeferredPrepass, DepthPrepass},
+    core_pipeline::{
+        fxaa::Fxaa,
+        prepass::{DeferredPrepass, DepthPrepass},
+    },
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     math::*,
     pbr::{DefaultOpaqueRendererMethod, PbrPlugin},
@@ -27,7 +30,7 @@ fn main() {
         .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
         .insert_resource(AmbientLight {
             color: Color::rgb(1.0, 1.0, 1.0),
-            brightness: 0.0,
+            brightness: 0.01,
         })
         .insert_resource(DefaultOpaqueRendererMethod::deferred())
         .add_plugins(
@@ -63,14 +66,19 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    //// circular base
-    //commands.spawn(PbrBundle {
-    //    mesh: meshes.add(shape::Circle::new(100.0).into()),
-    //    material: materials.add(Color::rgb(0.6, 0.6, 0.6).into()),
-    //    transform: Transform::from_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)),
-    //    ..default()
-    //});
-    //
+    // Water
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(
+            shape::Plane {
+                size: 10000.0,
+                subdivisions: 0,
+            }
+            .into(),
+        ),
+        material: materials.add(Color::rgb(0.6, 0.6, 0.6).into()),
+        ..default()
+    });
+
     //commands.spawn(PbrBundle {
     //    mesh: meshes.add(Mesh::from(shape::Cube { size: 2.0 })),
     //    material: materials.add(Color::rgb(0.6, 0.6, 0.6).into()),
@@ -107,10 +115,10 @@ fn setup(
                     .looking_at(vec3(150.8, 0.0, 150.8), Vec3::Y),
                 ..default()
             },
+            UnitsPass,
             ParticlesPass,
             DeferredPrepass,
             DepthPrepass,
-            UnitsPass,
         ))
         .insert(CameraController {
             mouse_key_enable_mouse: MouseButton::Middle,
@@ -118,7 +126,7 @@ fn setup(
             walk_speed: 50.0,
             ..default()
         })
-        .insert(TAABundle::sample8())
+        .insert(Fxaa::default())
         .insert(SSGIBundle {
             ssgi_pass: SSGIPass {
                 brightness: 1.0,

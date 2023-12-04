@@ -6,7 +6,7 @@
 #import "shaders/xyz8e5.wgsl"::{xyz8e5_to_vec3_, vec3_to_xyz8e5_}
 #import "shaders/unit_evaluate.wgsl"::{UnitCommand, unpack_unit, pack_unit}
 #import "shaders/unit_evaluate.wgsl" as eval
-#import "shaders/sampling.wgsl"::sampling
+#import "shaders/sampling.wgsl" as sampling
 
 #import bevy_pbr::{
     pbr_types::STANDARD_MATERIAL_FLAGS_UNLIT_BIT,
@@ -73,8 +73,8 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
         center = mix(center, fprojectile_dest, saturate(unit.progress));
     } else {
-        size = 0.0;
-        // discard;?
+        out.position = vec4(0.0);
+        return out;
     }
 
     //let center = vec3(2.0, 2.0, 0.0);

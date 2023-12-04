@@ -6,7 +6,7 @@
 #import "shaders/xyz8e5.wgsl"::{xyz8e5_to_vec3_, vec3_to_xyz8e5_}
 #import "shaders/unit_evaluate.wgsl"::{UnitCommand, unpack_unit, pack_unit}
 #import "shaders/unit_evaluate.wgsl" as eval
-#import "shaders/sampling.wgsl"::sampling
+#import "shaders/sampling.wgsl" as sampling
 
 #import bevy_pbr::{
     pbr_types::STANDARD_MATERIAL_FLAGS_UNLIT_BIT,
@@ -59,8 +59,8 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     var size = 0.4;
 
     if unit.health == 0u {
-        size = 0.08;
-        // discard;?
+        out.position = vec4(0.0);
+        return out;
     }
 
     
@@ -123,7 +123,7 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     pbr.material.flags |= STANDARD_MATERIAL_FLAGS_UNLIT_BIT;
     
     var color = select(vec3(0.4, 0.02, 0.02), vec3(0.02, 0.15, 0.02), unit.team == 1u);
-    color = select(color, vec3(0.1, 0.1, 0.1), unit.team == 0u);
+    color = select(color, vec3(0.0, 0.0, 0.0), unit.team == 0u);
     pbr.material.base_color = vec4(color, 1.0);
 
     out.deferred = deferred_gbuffer_from_pbr_input(pbr);

@@ -122,7 +122,7 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     pbr.N = V;
     pbr.material.flags |= STANDARD_MATERIAL_FLAGS_UNLIT_BIT;
     
-    var color = select(vec3(1.0, 0.0, 0.0), vec3(0.0, 2.0, 0.0), unit.team == 1u);
+    var color = select(vec3(0.4, 0.02, 0.02), vec3(0.02, 0.15, 0.02), unit.team == 1u);
     color = select(color, vec3(0.1, 0.1, 0.1), unit.team == 0u);
     pbr.material.base_color = vec4(color, 1.0);
 

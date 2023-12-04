@@ -70,8 +70,8 @@ const UNIT_MODE_MOVE: u32 = 1u;
 const UNIT_MODE_MOVEING: u32 = 2u;
 const UNIT_MODE_ATTACK: u32 = 3u;
 
-const SPEED_MOVE: f32 = 5.0;
-const SPEED_ATTACK: f32 = 5.0;
+const SPEED_MOVE: f32 = 8.0;
+const SPEED_ATTACK: f32 = 8.0;
 
 
 fn unpack_unit(data: vec4<u32>) -> Unit {
@@ -164,10 +164,10 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
         }
     }        
     
+    // --- Random spawn ---
     let rng = sampling::hash_noise(ufrag_coord + globals.frame_count, globals.frame_count + 34121u);
     if in.uv.y < 0.2 || in.uv.y > 0.8 {
-        if unit.health == 0u && distance(rng, 0.5) < 0.000002 {
-            // Random spawn
+        if unit.health == 0u && distance(rng, 0.5) < 0.001 * globals.delta_time {
             unit = unpack_unit(vec4(0u));
             unit.health = 255u;
             unit.id = u32(sampling::hash_noise(ufrag_coord, globals.frame_count + 96421u) * f32(sampling::U32_MAX)) + 1u;

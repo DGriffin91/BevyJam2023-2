@@ -114,8 +114,8 @@ fn setup(
         ))
         .insert(CameraController {
             mouse_key_enable_mouse: MouseButton::Middle,
-            run_speed: 80.0,
-            walk_speed: 20.0,
+            run_speed: 150.0,
+            walk_speed: 50.0,
             ..default()
         })
         .insert(TAABundle::sample8())

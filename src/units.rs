@@ -43,7 +43,7 @@ const UNITS_DATA_FORMAT: TextureFormat = TextureFormat::Rgba32Uint;
 const UNITS_ATTACK_FORMAT: TextureFormat = TextureFormat::Rgba8Uint;
 const UNITS_DATA_WIDTH: u32 = 512;
 const UNITS_DATA_HEIGHT: u32 = 512;
-const ATTACK_RADIUS: u32 = 4;
+const ATTACK_RADIUS: u32 = 5;
 
 #[derive(Resource, Clone, ExtractResource, Copy, ShaderType, Debug, Default)]
 pub struct UnitCommand {
@@ -271,6 +271,18 @@ impl ViewNode for UnitsNode {
                 }),
             });
 
+            // DRAW UNITS
+            render_pass.set_render_pipeline(pipeline);
+            render_pass.set_bind_group(0, &bind_group, &[view_uniform_offset.offset]);
+            render_pass.draw(0..UNITS_DATA_WIDTH * UNITS_DATA_HEIGHT * 6, 0..1);
+
+            let Some(pipeline) =
+                pipeline_cache.get_render_pipeline(unit_pipeline.draw_projectiles_pipeline_id)
+            else {
+                return Ok(());
+            };
+
+            // DRAW UNIT PROJECTILES
             render_pass.set_render_pipeline(pipeline);
             render_pass.set_bind_group(0, &bind_group, &[view_uniform_offset.offset]);
             render_pass.draw(0..UNITS_DATA_WIDTH * UNITS_DATA_HEIGHT * 6, 0..1);
@@ -287,6 +299,7 @@ struct UnitPipeline {
     draw_pipeline_id: CachedRenderPipelineId,
     evaluate_pipeline_id: CachedRenderPipelineId,
     evaluate_layout: BindGroupLayout,
+    draw_projectiles_pipeline_id: CachedRenderPipelineId,
 }
 
 impl FromWorld for UnitPipeline {
@@ -399,49 +412,62 @@ impl FromWorld for UnitPipeline {
             .resource::<AssetServer>()
             .load("shaders/unit_material.wgsl");
 
-        let draw_pipeline_id =
-            world
-                .resource_mut::<PipelineCache>()
-                .queue_render_pipeline(RenderPipelineDescriptor {
-                    label: Some("unit_draw_pipeline".into()),
-                    layout: vec![draw_layout.clone()],
+        let mut draw_pipline_desc = RenderPipelineDescriptor {
+            label: Some("unit_draw_pipeline".into()),
+            layout: vec![draw_layout.clone()],
 
-                    vertex: VertexState {
-                        shader: shader.clone(),
-                        shader_defs: shader_defs.clone(),
-                        entry_point: "vertex".into(),
-                        buffers: Vec::new(),
-                    },
-                    fragment: Some(FragmentState {
-                        shader: shader.clone(),
-                        shader_defs: shader_defs.clone(),
+            vertex: VertexState {
+                shader: shader.clone(),
+                shader_defs: shader_defs.clone(),
+                entry_point: "vertex".into(),
+                buffers: Vec::new(),
+            },
+            fragment: Some(FragmentState {
+                shader: shader.clone(),
+                shader_defs: shader_defs.clone(),
 
-                        entry_point: "fragment".into(),
-                        targets: vec![
-                            Some(ColorTargetState {
-                                format: DEFERRED_PREPASS_FORMAT,
-                                blend: None,
-                                write_mask: ColorWrites::ALL,
-                            }),
-                            Some(ColorTargetState {
-                                format: DEFERRED_LIGHTING_PASS_ID_FORMAT,
-                                blend: None,
-                                write_mask: ColorWrites::ALL,
-                            }),
-                        ],
+                entry_point: "fragment".into(),
+                targets: vec![
+                    Some(ColorTargetState {
+                        format: DEFERRED_PREPASS_FORMAT,
+                        blend: None,
+                        write_mask: ColorWrites::ALL,
                     }),
-
-                    primitive: PrimitiveState::default(),
-                    depth_stencil: Some(DepthStencilState {
-                        format: CORE_3D_DEPTH_FORMAT,
-                        depth_write_enabled: true,
-                        depth_compare: CompareFunction::GreaterEqual,
-                        stencil: StencilState::default(),
-                        bias: DepthBiasState::default(),
+                    Some(ColorTargetState {
+                        format: DEFERRED_LIGHTING_PASS_ID_FORMAT,
+                        blend: None,
+                        write_mask: ColorWrites::ALL,
                     }),
-                    multisample: MultisampleState::default(),
-                    push_constant_ranges: vec![],
-                });
+                ],
+            }),
+
+            primitive: PrimitiveState::default(),
+            depth_stencil: Some(DepthStencilState {
+                format: CORE_3D_DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: CompareFunction::GreaterEqual,
+                stencil: StencilState::default(),
+                bias: DepthBiasState::default(),
+            }),
+            multisample: MultisampleState::default(),
+            push_constant_ranges: vec![],
+        };
+
+        let draw_pipeline_id = world
+            .resource_mut::<PipelineCache>()
+            .queue_render_pipeline(draw_pipline_desc.clone());
+
+        let shader = world
+            .resource::<AssetServer>()
+            .load("shaders/unit_projectile_material.wgsl");
+        draw_pipline_desc.label = Some("unit_projectile_draw_pipeline".into());
+        draw_pipline_desc.vertex.shader = shader.clone();
+        if let Some(frag) = draw_pipline_desc.fragment.as_mut() {
+            frag.shader = shader;
+        }
+        let draw_projectiles_pipeline_id = world
+            .resource_mut::<PipelineCache>()
+            .queue_render_pipeline(draw_pipline_desc);
 
         Self {
             draw_layout,
@@ -450,6 +476,7 @@ impl FromWorld for UnitPipeline {
             update_pipeline_id,
             evaluate_layout,
             evaluate_pipeline_id,
+            draw_projectiles_pipeline_id,
         }
     }
 }
@@ -493,26 +520,26 @@ fn prepare_textures(
         let unit_data_texture_b = texture_cache.get(&render_device, texture_descriptor.clone());
 
         texture_descriptor.format = UNITS_ATTACK_FORMAT;
-        texture_descriptor.label = Some("unit_damage_map");
-        let unit_damage_texture_a = texture_cache.get(&render_device, texture_descriptor.clone());
+        texture_descriptor.label = Some("unit_attack_map_a");
+        let unit_attack_texture_a = texture_cache.get(&render_device, texture_descriptor.clone());
         texture_descriptor.format = UNITS_ATTACK_FORMAT;
-        texture_descriptor.label = Some("unit_damage_map");
-        let unit_damage_texture_b = texture_cache.get(&render_device, texture_descriptor.clone());
+        texture_descriptor.label = Some("unit_attack_map_b");
+        let unit_attack_texture_b = texture_cache.get(&render_device, texture_descriptor.clone());
 
         let textures = if frame_count.0 % 2 == 0 {
             UnitsDataTextures {
-                b: unit_data_texture_a,
-                a: unit_data_texture_b,
-                attack_a: unit_damage_texture_a,
-                attack_b: unit_damage_texture_b,
+                a: unit_data_texture_a,
+                b: unit_data_texture_b,
+                attack_a: unit_attack_texture_a,
+                attack_b: unit_attack_texture_b,
             }
         } else {
             // Using the same for both unit data since a flip flop happens in the node
             UnitsDataTextures {
-                b: unit_data_texture_a,
-                a: unit_data_texture_b,
-                attack_a: unit_damage_texture_b,
-                attack_b: unit_damage_texture_a,
+                a: unit_data_texture_a,
+                b: unit_data_texture_b,
+                attack_a: unit_attack_texture_b,
+                attack_b: unit_attack_texture_a,
             }
         };
         commands.entity(entity).insert(textures);

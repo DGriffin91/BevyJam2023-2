@@ -125,6 +125,8 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
 
     let system_index = ufrag_coord.y;
 
+    out.attack_data = textureLoad(prev_attack, ifrag_coord, 0);
+
     let data = textureLoad(data_texture, ifrag_coord, 0);
     var unit = unpack_unit(data);
 
@@ -162,9 +164,9 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
         }
     }        
     
-    let rng = sampling::hash_noise(ufrag_coord, globals.frame_count + 3498u);
+    let rng = sampling::hash_noise(ufrag_coord + globals.frame_count, globals.frame_count + 34121u);
     if in.uv.y < 0.2 || in.uv.y > 0.8 {
-        if unit.health == 0u && rng > 0.999999 {
+        if unit.health == 0u && distance(rng, 0.5) < 0.000002 {
             // Random spawn
             unit = unpack_unit(vec4(0u));
             unit.health = 255u;
@@ -184,6 +186,14 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
         return out;
     }
 
+    if command.command > 0u && unit.team == 1u {
+        unit.dest = command.dest;
+        if unit.mode != UNIT_MODE_MOVEING {
+            unit.mode = UNIT_MODE_MOVE;
+            unit.progress = 0.0;
+        }
+    }
+
     if unit.mode == UNIT_MODE_IDLE {
         // First check if the unit we were shooting at is still there and use that one first otherwise find a new one
         let prev_attack_data = textureLoad(prev_attack, ifrag_coord, 0);
@@ -193,14 +203,13 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
         var other_data = textureLoad(data_texture, ifrag_coord + prev_attack_vector, 0);
         var other_unit = unpack_unit(other_data);
         if other_unit.id != unit.id && other_unit.health != 0u && other_unit.team > 0u && unit.team != other_unit.team {
-            out.attack_data = prev_attack_data;
             unit.mode = UNIT_MODE_ATTACK;
             unit.progress = 0.0;
         } else {
             let noise = vec2(
                 sampling::hash_noise(ufrag_coord, globals.frame_count + 45623u),
                 sampling::hash_noise(ufrag_coord, globals.frame_count + 25674u),
-            ) * 2.0 + 1.0;
+            ) * 2.0 - 1.0;
             let attack_offset = clamp(vec2<i32>(noise * #{ATTACK_RADIUS}.0), vec2(-#{ATTACK_RADIUS}), vec2(#{ATTACK_RADIUS}));
             let attack_coord = attack_offset + ifrag_coord;
 
@@ -216,9 +225,6 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
         }
     }
 
-    if command.command > 0u && unit.team == 1u {
-        unit.dest = command.dest;
-    }
 
     if unit.mode == UNIT_MODE_IDLE || unit.mode == UNIT_MODE_MOVE && !all(ufrag_coord == unit.dest) {
         let f_to_dest = vec2<f32>(unit.dest) - vec2<f32>(ufrag_coord);

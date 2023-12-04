@@ -1,7 +1,9 @@
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
 pub mod bind_group_utils;
+pub mod minimap;
 pub mod particles;
+pub mod post_process;
 pub mod units;
 
 use bevy::{
@@ -19,7 +21,9 @@ use bevy::{
 use bevy_basic_camera::{CameraController, CameraControllerPlugin};
 use bevy_mod_taa::{TAABundle, TAAPlugin};
 use bevy_ridiculous_ssgi::{ssgi::SSGIPass, SSGIBundle, SSGIPlugin};
+use minimap::{MinimapPass, MinimapPlugin};
 use particles::{ParticleCommand, ParticlesPass, ParticlesPlugin};
+use post_process::PostProcessPlugin;
 use shared_exponent_formats::{rgb9e5::vec3_to_rgb9e5, xyz8e5::vec3_to_xyz8e5};
 use units::{UnitCommand, UnitsPass, UnitsPlugin};
 
@@ -52,7 +56,9 @@ fn main() {
             //ParticlesPlugin,
             UnitsPlugin,
             TAAPlugin,
+            MinimapPlugin,
             //SSGIPlugin,
+            PostProcessPlugin,
             LogDiagnosticsPlugin::default(),
             FrameTimeDiagnosticsPlugin::default(),
         ))
@@ -117,6 +123,7 @@ fn setup(
             },
             UnitsPass,
             ParticlesPass,
+            MinimapPass,
             DeferredPrepass,
             DepthPrepass,
         ))

@@ -4,13 +4,12 @@
 #import "shaders/xyz8e5.wgsl"::{xyz8e5_to_vec3_, vec3_to_xyz8e5_}
 #import "shaders/rgb9e5.wgsl"::{rgb9e5_to_vec3_, vec3_to_rgb9e5_}
 #import "shaders/sampling.wgsl" as sampling
-#import "shaders/unit_evaluate.wgsl"::{UnitCommand, unpack_unit, pack_unit}
-#import "shaders/unit_evaluate.wgsl" as eval
+#import "shaders/common.wgsl" as com
 
 
 
 @group(0) @binding(101) var data_texture: texture_2d<u32>;
-@group(0) @binding(102) var<uniform> command: UnitCommand;
+@group(0) @binding(102) var<uniform> command: com::UnitCommand;
 @group(0) @binding(103) var attack_texture: texture_2d<u32>;
 
 
@@ -23,7 +22,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
     let system_index = ufrag_coord.y;
     
     let data = textureLoad(data_texture, ifrag_coord, 0);
-    var unit = unpack_unit(data);
+    var unit = com::unpack_unit(data);
 
     let shuffle_x = max(i32(round(sampling::hash_noise(ufrag_coord, globals.frame_count + 83746u) * 3.0)), 0);
     let shuffle_y = max(i32(round(sampling::hash_noise(ufrag_coord, globals.frame_count + 12339u) * 3.0)), 0);
@@ -44,10 +43,10 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
                 let read_coord = ifrag_coord + offset;
 
                 let other_data = textureLoad(data_texture, read_coord, 0);
-                var other_unit = unpack_unit(other_data);
-                if other_unit.mode == eval::UNIT_MODE_MOVE && other_unit.health > 0u && all(read_coord + other_unit.step_dir == ifrag_coord) && other_unit.progress == 0.0 {
-                    other_unit.mode = eval::UNIT_MODE_MOVEING;
-                    return pack_unit(other_unit);
+                var other_unit = com::unpack_unit(other_data);
+                if other_unit.mode == com::UNIT_MODE_MOVE && other_unit.health > 0u && all(read_coord + other_unit.step_dir == ifrag_coord) && other_unit.progress == 0.0 {
+                    other_unit.mode = com::UNIT_MODE_MOVEING;
+                    return com::pack_unit(other_unit);
                 }
             }
         }
@@ -77,6 +76,6 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
     }
 
 
-    return pack_unit(unit);
+    return com::pack_unit(unit);
 }
 

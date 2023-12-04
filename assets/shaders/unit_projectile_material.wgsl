@@ -4,8 +4,7 @@
 #import bevy_pbr::mesh_functions
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
 #import "shaders/xyz8e5.wgsl"::{xyz8e5_to_vec3_, vec3_to_xyz8e5_}
-#import "shaders/unit_evaluate.wgsl"::{UnitCommand, unpack_unit, pack_unit}
-#import "shaders/unit_evaluate.wgsl" as eval
+#import "shaders/common.wgsl" as com
 #import "shaders/sampling.wgsl" as sampling
 
 #import bevy_pbr::{
@@ -17,7 +16,7 @@
 #import bevy_pbr::utils::PI
 
 @group(0) @binding(101) var data_texture: texture_2d<u32>;
-@group(0) @binding(102) var<uniform> commands: UnitCommand;
+@group(0) @binding(102) var<uniform> commands: com::UnitCommand;
 @group(0) @binding(103) var attack_texture: texture_2d<u32>;
 
 struct VertexOutput {
@@ -55,7 +54,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     );
 
     let unit_data = textureLoad(data_texture, iunit_coord, 0);
-    let unit = unpack_unit(unit_data);
+    let unit = com::unpack_unit(unit_data);
 
     var size = 0.2;
     var projectile_y = 0.7;
@@ -66,7 +65,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let attack_data = textureLoad(attack_texture, iunit_coord, 0);
     let attack_vector = vec2<i32>(attack_data.xy) - #{ATTACK_RADIUS};
     let attack_damage = attack_data.z;
-    if unit.health != 0u && unit.mode == eval::UNIT_MODE_ATTACK && !all(attack_vector == vec2(0))  {
+    if unit.health != 0u && unit.mode == com::UNIT_MODE_ATTACK && !all(attack_vector == vec2(0))  {
 
         let iprojectile_dest = iunit_coord + attack_vector;
         let fprojectile_dest = vec3(f32(iprojectile_dest.x), projectile_y, f32(iprojectile_dest.y));
@@ -121,7 +120,7 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     var N = normalize(in.world_normal);
     var V = normalize(view.world_position.xyz - in.world_position.xyz);
 
-    let unit = unpack_unit(in.unit_data);
+    let unit = com::unpack_unit(in.unit_data);
 
     var pbr = pbr_input_new();
     pbr.N = V;

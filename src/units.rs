@@ -39,11 +39,11 @@ use crate::{
     shader_def_uint,
 };
 
-const UNITS_DATA_FORMAT: TextureFormat = TextureFormat::Rgba32Uint;
-const UNITS_ATTACK_FORMAT: TextureFormat = TextureFormat::Rgba8Uint;
-const UNITS_DATA_WIDTH: u32 = 512;
-const UNITS_DATA_HEIGHT: u32 = 512;
-const ATTACK_RADIUS: u32 = 5;
+pub const UNITS_DATA_FORMAT: TextureFormat = TextureFormat::Rgba32Uint;
+pub const UNITS_ATTACK_FORMAT: TextureFormat = TextureFormat::Rgba8Uint;
+pub const UNITS_DATA_WIDTH: u32 = 512;
+pub const UNITS_DATA_HEIGHT: u32 = 512;
+pub const ATTACK_RADIUS: u32 = 5;
 
 #[derive(Resource, Clone, ExtractResource, Copy, ShaderType, Debug, Default)]
 pub struct UnitCommand {
@@ -96,9 +96,9 @@ impl Plugin for UnitsPlugin {
 pub struct UnitsPass;
 
 #[derive(Default)]
-struct UnitsNode;
+pub struct UnitsNode;
 impl UnitsNode {
-    pub const NAME: &'static str = "deferred_unit_pass";
+    pub const NAME: &'static str = "units_pass";
 }
 
 impl ViewNode for UnitsNode {
@@ -157,7 +157,7 @@ impl ViewNode for UnitsNode {
             );
 
             let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
-                label: Some("unit_pass"),
+                label: Some("Units Evaluate"),
                 color_attachments: &[
                     Some(RenderPassColorAttachment {
                         view: &unit_data_texture.b.default_view,
@@ -205,7 +205,7 @@ impl ViewNode for UnitsNode {
             );
 
             let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
-                label: Some("unit_pass"),
+                label: Some("Units Update"),
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view: &unit_data_texture.a.default_view,
                     resolve_target: None,
@@ -242,7 +242,7 @@ impl ViewNode for UnitsNode {
             );
 
             let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
-                label: Some("unit_pass"),
+                label: Some("Units Draw"),
                 color_attachments: &[
                     Some(RenderPassColorAttachment {
                         view: &gbuffer.default_view,
@@ -485,8 +485,8 @@ impl FromWorld for UnitPipeline {
 pub struct UnitsDataTextures {
     pub a: CachedTexture,
     pub b: CachedTexture,
-    attack_a: CachedTexture,
-    attack_b: CachedTexture,
+    pub attack_a: CachedTexture,
+    pub attack_b: CachedTexture,
 }
 
 fn prepare_textures(

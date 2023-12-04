@@ -4,110 +4,14 @@
 #import "shaders/xyz8e5.wgsl"::{xyz8e5_to_vec3_, vec3_to_xyz8e5_}
 #import "shaders/rgb9e5.wgsl"::{rgb9e5_to_vec3_, vec3_to_rgb9e5_}
 #import "shaders/sampling.wgsl" as sampling
+#import "shaders/common.wgsl" as com
 
 
-fn unpack_2x4_from_8(v: u32) -> vec2<u32> {
-    return vec2(
-        v & 0xFu,
-        (v >> 4u) & 0xFu,
-    );
-}
-
-fn pack_2x4_to_8(v: vec2<u32>) -> u32 {
-    return ((v.y & 0xFu) << 4u) | (v.x & 0xFu);
-}
-
-fn unpack_4x8_(v: u32) -> vec4<u32> {
-    return vec4(
-        v & 0xFFu,
-        (v >> 8u) & 0xFFu,
-        (v >> 16u) & 0xFFu,
-        (v >> 24u) & 0xFFu
-    );
-}
-
-fn pack_4x8_(v: vec4<u32>) -> u32 {
-    return ((v.w & 0xFFu) << 24u) | ((v.z & 0xFFu) << 16u) | ((v.y & 0xFFu) << 8u) | (v.x & 0xFFu);
-}
-
-fn unpack_2x16_(v: u32) -> vec2<u32> {
-    return vec2(
-        v & 0xFFFFu,
-        (v >> 16u) & 0xFFFFu,
-    );
-}
-
-fn pack_2x16_(v: vec2<u32>) -> u32 {
-    return ((v.y & 0xFFFFu) << 16u) | (v.x & 0xFFFFu);
-}
-
-fn sign2i(n: vec2<i32>) -> vec2<i32> {
-    return vec2(
-        select(select(-1, 1, n.x > 0), 0, n.x == 0),
-        select(select(-1, 1, n.y > 0), 0, n.y == 0),
-    );
-}
-
-struct UnitCommand {
-    select_region: vec4<u32>,
-    dest: vec2<u32>,
-    command: u32,
-    padding: u32,
-};
-
-struct Unit {
-    health: u32,
-    progress: f32,
-    step_dir: vec2<i32>,
-    dest: vec2<u32>,
-    mode: u32,
-    team: u32,
-    id: u32,    
-}
-
-const UNIT_MODE_IDLE: u32 = 0u;
-const UNIT_MODE_MOVE: u32 = 1u;
-const UNIT_MODE_MOVEING: u32 = 2u;
-const UNIT_MODE_ATTACK: u32 = 3u;
-
-const SPEED_MOVE: f32 = 5.0;
-const SPEED_ATTACK: f32 = 5.0;
 
 
-fn unpack_unit(data: vec4<u32>) -> Unit {
-    var unit: Unit;
-    unit.progress = bitcast<f32>(data.x);
-    let d = unpack_4x8_(data.y);
-    unit.step_dir = vec2<i32>(unpack_2x4_from_8(d.x)) - 1;
-    // d.y is spare
-    unit.health = d.z;
-    let mode_team = unpack_2x4_from_8(d.w);
-    unit.mode = mode_team.x; 
-    unit.team = mode_team.y;
-    unit.dest = unpack_2x16_(data.z);
-    unit.id = data.w;
-    return unit;
-}
-
-fn pack_unit(unit: Unit) -> vec4<u32> {
-    return vec4<u32>(
-        bitcast<u32>(unit.progress),
-        pack_4x8_(vec4(
-                pack_2x4_to_8(vec2(
-                    u32(unit.step_dir.x + 1),
-                    u32(unit.step_dir.y + 1), 
-                )), 
-                0u, //spare
-                unit.health, 
-                pack_2x4_to_8(vec2(unit.mode, unit.team)),
-        )),
-        pack_2x16_(unit.dest),
-        unit.id,
-    );
-}
 
 @group(0) @binding(101) var data_texture: texture_2d<u32>;
-@group(0) @binding(102) var<uniform> command: UnitCommand;
+@group(0) @binding(102) var<uniform> command: com::UnitCommand;
 @group(0) @binding(103) var prev_attack: texture_2d<u32>;
 
 struct FragmentOutput {
@@ -128,18 +32,18 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
     out.attack_data = textureLoad(prev_attack, ifrag_coord, 0);
 
     let data = textureLoad(data_texture, ifrag_coord, 0);
-    var unit = unpack_unit(data);
+    var unit = com::unpack_unit(data);
 
     if unit.progress >= 1.0 {
-        unit.mode = UNIT_MODE_IDLE;
+        unit.mode = com::UNIT_MODE_IDLE;
     }
 
     
     var step_mult = 0.0;
-    if unit.mode == UNIT_MODE_MOVEING {
-        step_mult = SPEED_MOVE;
-    } else if unit.mode == UNIT_MODE_ATTACK {
-        step_mult = SPEED_ATTACK;
+    if unit.mode == com::UNIT_MODE_MOVEING {
+        step_mult = com::SPEED_MOVE;
+    } else if unit.mode == com::UNIT_MODE_ATTACK {
+        step_mult = com::SPEED_ATTACK;
     }
     unit.progress += globals.delta_time * step_mult;
 
@@ -152,7 +56,7 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
                 let read_coord = ifrag_coord + offset;
 
                 let other_data = textureLoad(data_texture, read_coord, 0);
-                let other_unit = unpack_unit(other_data);
+                let other_unit = com::unpack_unit(other_data);
 
                 // If we're the same id and we're in the spot this unit came from, delete this one as it has moved
                 if other_unit.id == unit.id && all(read_coord == ifrag_coord + other_unit.step_dir) {
@@ -168,12 +72,12 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
     let rng = sampling::hash_noise(ufrag_coord + globals.frame_count, globals.frame_count + 34121u);
     if in.uv.y < 0.2 || in.uv.y > 0.8 {
         if unit.health == 0u && distance(rng, 0.5) < 0.0005 * globals.delta_time {
-            unit = unpack_unit(vec4(0u));
+            unit = com::unpack_unit(vec4(0u));
             unit.health = 255u;
             unit.id = u32(sampling::hash_noise(ufrag_coord, globals.frame_count + 96421u) * f32(sampling::U32_MAX)) + 1u;
             unit.dest = ufrag_coord;
             unit.team = select(1u, 2u, in.uv.y > 0.5);
-            out.unit_data = pack_unit(unit);
+            out.unit_data = com::pack_unit(unit);
             out.attack_data = vec4(0u);
             return out;
         }
@@ -188,22 +92,22 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
 
     if command.command > 0u && unit.team == 1u {
         unit.dest = command.dest;
-        if unit.mode != UNIT_MODE_MOVEING {
-            unit.mode = UNIT_MODE_MOVE;
+        if unit.mode != com::UNIT_MODE_MOVEING {
+            unit.mode = com::UNIT_MODE_MOVE;
             unit.progress = 0.0;
         }
     }
 
-    if unit.mode == UNIT_MODE_IDLE {
+    if unit.mode == com::UNIT_MODE_IDLE {
         // First check if the unit we were shooting at is still there and use that one first otherwise find a new one
         let prev_attack_data = textureLoad(prev_attack, ifrag_coord, 0);
         let prev_attack_vector = vec2<i32>(prev_attack_data.xy) - #{ATTACK_RADIUS};
         let prev_attack_damage = prev_attack_data.z;
 
         var other_data = textureLoad(data_texture, ifrag_coord + prev_attack_vector, 0);
-        var other_unit = unpack_unit(other_data);
+        var other_unit = com::unpack_unit(other_data);
         if other_unit.id != unit.id && other_unit.health != 0u && other_unit.team > 0u && unit.team != other_unit.team {
-            unit.mode = UNIT_MODE_ATTACK;
+            unit.mode = com::UNIT_MODE_ATTACK;
             unit.progress = 0.0;
         } else {
             let noise = vec2(
@@ -214,19 +118,19 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
             let attack_coord = attack_offset + ifrag_coord;
 
             other_data = textureLoad(data_texture, attack_coord, 0);
-            other_unit = unpack_unit(other_data);
+            other_unit = com::unpack_unit(other_data);
             let attack_damage = 1u;
 
             if other_unit.id != unit.id && other_unit.health > 0u && other_unit.team > 0u && unit.team != other_unit.team {
                 out.attack_data = vec4(vec2<u32>(attack_offset + #{ATTACK_RADIUS}), attack_damage, 0u);
-                unit.mode = UNIT_MODE_ATTACK;
+                unit.mode = com::UNIT_MODE_ATTACK;
                 unit.progress = 0.0;
             }
         }
     }
 
 
-    if unit.mode == UNIT_MODE_IDLE || unit.mode == UNIT_MODE_MOVE && !all(ufrag_coord == unit.dest) {
+    if unit.mode == com::UNIT_MODE_IDLE || unit.mode == com::UNIT_MODE_MOVE && !all(ufrag_coord == unit.dest) {
         let f_to_dest = vec2<f32>(unit.dest) - vec2<f32>(ufrag_coord);
 
         var dir_noise = vec2(0.0);
@@ -236,17 +140,17 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
         ) * 2.0 - 1.0;
         dir_noise *= length(f_to_dest);
 
-        let step_dir = sign2i(vec2<i32>(f_to_dest + dir_noise));
+        let step_dir = com::sign2i(vec2<i32>(f_to_dest + dir_noise));
         if !all(step_dir == vec2(0)) {
             unit.step_dir = step_dir;
-            unit.mode = UNIT_MODE_MOVE;
+            unit.mode = com::UNIT_MODE_MOVE;
             out.attack_data = vec4(0u);
             unit.progress = 0.0;
         }
     }
 
     
-    out.unit_data = pack_unit(unit);
+    out.unit_data = com::pack_unit(unit);
     return out;
 }
 

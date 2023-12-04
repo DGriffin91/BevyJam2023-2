@@ -18,6 +18,7 @@
 
 @group(0) @binding(101) var data_texture: texture_2d<u32>;
 @group(0) @binding(102) var<uniform> commands: UnitCommand;
+@group(0) @binding(103) var attack_texture: texture_2d<u32>;
 
 struct VertexOutput {
     // this is `clip position` when the struct is used as a vertex stage output 
@@ -32,7 +33,7 @@ struct VertexOutput {
 #ifdef VERTEX_COLORS
     @location(4) color: vec4<f32>,
 #endif
-    @location(5) velocity: vec4<f32>,
+    @location(5) unit_data: vec4<u32>,
 }
 
 struct Vertex {
@@ -51,17 +52,17 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let data_x = i32(unit_index % dims.x);
     let data_y = i32(unit_index / dims.x);
 
-    let data = textureLoad(data_texture, vec2<i32>(data_x, data_y), 0);
-    let unit = unpack_unit(data);
+    let unit_data = textureLoad(data_texture, vec2<i32>(data_x, data_y), 0);
+    let unit = unpack_unit(unit_data);
 
-    var size = 0.05;
+    var size = 0.4;
 
     if unit.health == 0u {
-        size = 0.008;
+        size = 0.08;
         // discard;?
     }
 
-    let center = vec3(f32(data_x) * 0.1, 0.5, f32(data_y) * 0.1);
+    let center = vec3(f32(data_x), 0.5, f32(data_y));
     //let center = vec3(2.0, 2.0, 0.0);
 
     let idx = vertex.index % 6u;
@@ -89,7 +90,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 #endif
 
     out.position = position;
-    out.velocity = vec4(xyz8e5_to_vec3_(bitcast<u32>(data.w)), 1.0);
+    out.unit_data = unit_data;
 
 
     return out;
@@ -106,11 +107,14 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     var N = normalize(in.world_normal);
     var V = normalize(view.world_position.xyz - in.world_position.xyz);
 
+    let unit = unpack_unit(in.unit_data);
+
     var pbr = pbr_input_new();
     pbr.N = V;
     pbr.material.flags |= STANDARD_MATERIAL_FLAGS_UNLIT_BIT;
     
-    let color = vec3(1.0, 0.0, 1.0);
+    var color = select(vec3(1.0, 0.0, 0.0), vec3(0.0, 2.0, 0.0), unit.team == 1u);
+    color = select(color, vec3(0.1, 0.1, 0.1), unit.team == 0u);
     pbr.material.base_color = vec4(color, 1.0);
 
     out.deferred = deferred_gbuffer_from_pbr_input(pbr);

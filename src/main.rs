@@ -5,6 +5,7 @@ pub mod particles;
 pub mod units;
 
 use bevy::{
+    asset::AssetMetaCheck,
     core_pipeline::prepass::{DeferredPrepass, DepthPrepass},
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     math::*,
@@ -21,6 +22,7 @@ use units::{UnitCommand, UnitsPass, UnitsPlugin};
 
 fn main() {
     App::new()
+        .insert_resource(AssetMetaCheck::Never)
         .insert_resource(Msaa::Off)
         .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
         .insert_resource(AmbientLight {
@@ -36,7 +38,7 @@ fn main() {
                 })
                 .set(WindowPlugin {
                     primary_window: Some(Window {
-                        present_mode: PresentMode::AutoNoVsync,
+                        present_mode: PresentMode::AutoVsync,
                         ..default()
                     }),
                     ..default()
@@ -101,8 +103,8 @@ fn setup(
                     hdr: true,
                     ..default()
                 },
-                transform: Transform::from_xyz(0.0, 15.0, 0.0)
-                    .looking_at(vec3(12.8, 1.0, 12.8), Vec3::Y),
+                transform: Transform::from_xyz(-30.0, 200.0, -30.0)
+                    .looking_at(vec3(150.8, 0.0, 150.8), Vec3::Y),
                 ..default()
             },
             ParticlesPass,
@@ -111,7 +113,9 @@ fn setup(
             UnitsPass,
         ))
         .insert(CameraController {
-            mouse_key_enable_mouse: MouseButton::Right,
+            mouse_key_enable_mouse: MouseButton::Middle,
+            run_speed: 40.0,
+            walk_speed: 8.0,
             ..default()
         })
         .insert(TAABundle::sample8())
@@ -184,10 +188,12 @@ fn command_units(
     window: Query<&Window, With<PrimaryWindow>>,
     cameras: Query<(&Camera, &GlobalTransform)>,
     mut unit_command: ResMut<UnitCommand>,
+    //mut select_start: Local<Option<Vec3>>,
+    //mut select_end: Local<Option<Vec3>>,
 ) {
     let window = window.get_single().unwrap();
     if let Some((camera, transform)) = cameras.iter().next() {
-        if mouse_button_input.just_pressed(MouseButton::Left) {
+        if mouse_button_input.just_pressed(MouseButton::Right) {
             let ray = window
                 .cursor_position()
                 .and_then(|cursor_pos| from_screenspace(cursor_pos, camera, transform, window));
@@ -196,10 +202,7 @@ fn command_units(
                     ray_plane_intersection(ray, vec3(0.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0));
                 if let Some(intersection) = intersection {
                     if intersection.x > 0.0 && intersection.z > 0.0 {
-                        unit_command.dest = uvec2(
-                            (intersection.x * 10.0) as u32,
-                            (intersection.z * 10.0) as u32,
-                        );
+                        unit_command.dest = uvec2(intersection.x as u32, intersection.z as u32);
                         unit_command.command = 1u32;
                     }
                 }

@@ -5,11 +5,13 @@
 #import "shaders/rgb9e5.wgsl"::{rgb9e5_to_vec3_, vec3_to_rgb9e5_}
 #import "shaders/sampling.wgsl" as sampling
 #import "shaders/unit_evaluate.wgsl"::{UnitCommand, unpack_unit, pack_unit}
+#import "shaders/unit_evaluate.wgsl" as eval
 
 
 
 @group(0) @binding(101) var data_texture: texture_2d<u32>;
 @group(0) @binding(102) var<uniform> command: UnitCommand;
+@group(0) @binding(103) var attack_texture: texture_2d<u32>;
 
 
 @fragment
@@ -21,25 +23,61 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
     let system_index = ufrag_coord.y;
     
     let data = textureLoad(data_texture, ifrag_coord, 0);
-    let unit = unpack_unit(data);
+    var unit = unpack_unit(data);
+
+    let shuffle_x = max(i32(round(sampling::hash_noise(ufrag_coord, globals.frame_count + 83746u) * 3.0)), 0);
+    let shuffle_y = max(i32(round(sampling::hash_noise(ufrag_coord, globals.frame_count + 12339u) * 3.0)), 0);
 
     // if there is not living unit in this cell, we can allow another unit to take this spot
     if unit.health == 0u {
         // Check to see if any of the surrounding tiles want to move into this one and pick one
-        for (var x = -1; x <= 1; x += 1) {
-            for (var y = -1; y <= 1; y += 1) {
-                let offset = vec2(x, y);
+        for (var x = 0; x < 3; x += 1) {
+            for (var y = 0; y < 3; y += 1) {
+                let offset = vec2(
+                    (x + shuffle_x) % 3 - 1, 
+                    (y + shuffle_y) % 3 - 1,
+                );
+                if all(offset == vec2(0)) {
+                    continue;
+                }
 
                 let read_coord = ifrag_coord + offset;
 
                 let other_data = textureLoad(data_texture, read_coord, 0);
-                let other_unit = unpack_unit(other_data);
-                if other_unit.health > 0u && all(read_coord + other_unit.step_dir == ifrag_coord) {
-                    return other_data;
+                var other_unit = unpack_unit(other_data);
+                if other_unit.mode == eval::UNIT_MODE_MOVE && other_unit.health > 0u && all(read_coord + other_unit.step_dir == ifrag_coord) {
+                    // If we just moved we now become idle so we can possibily find another unit to attack in evaluate
+                    other_unit.mode = eval::UNIT_MODE_IDLE;
+                    return pack_unit(other_unit);
+                }
+            }
+        }
+    } else {
+        let radius = #{ATTACK_RADIUS};
+        // Check if a unit attacked us
+        for (var x = -radius; x <= radius; x += 1) {
+            for (var y = -radius; y <= radius; y += 1) {
+                let offset = vec2(x, y);
+                if all(offset == vec2(0, 0)) {
+                    continue;
+                }
+                let read_coord = ifrag_coord + offset;
+                let attack_data = textureLoad(attack_texture, read_coord, 0);
+                let attack_vector = vec2<i32>(attack_data.xy) - radius;
+                let attack_damage = attack_data.z;
+
+                // check team?
+                if attack_damage > 0u && all(read_coord + attack_vector == ifrag_coord) {
+                    unit.health -= attack_damage;
+                    if unit.health == 0u {
+                        return vec4(0u);
+                    }
                 }
             }
         }
     }
+
+    unit.mode = eval::UNIT_MODE_IDLE;
 
     return pack_unit(unit);
 }

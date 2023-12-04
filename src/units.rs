@@ -31,14 +31,19 @@ use bevy::{
     },
 };
 
-use crate::bind_group_utils::{
-    globals_binding, globals_layout_entry, uniform_buffer, uniform_layout_entry,
-    utexture_layout_entry, view_binding, view_layout_entry,
+use crate::{
+    bind_group_utils::{
+        globals_binding, globals_layout_entry, uniform_buffer, uniform_layout_entry,
+        utexture_layout_entry, view_binding, view_layout_entry,
+    },
+    shader_def_uint,
 };
 
 const UNITS_DATA_FORMAT: TextureFormat = TextureFormat::Rgba32Uint;
+const UNITS_ATTACK_FORMAT: TextureFormat = TextureFormat::Rgba8Uint;
 const UNITS_DATA_WIDTH: u32 = 512;
 const UNITS_DATA_HEIGHT: u32 = 512;
+const ATTACK_RADIUS: u32 = 4;
 
 #[derive(Resource, Clone, ExtractResource, Copy, ShaderType, Debug, Default)]
 pub struct UnitCommand {
@@ -140,23 +145,31 @@ impl ViewNode for UnitsNode {
             };
 
             let bind_group = render_context.render_device().create_bind_group(
-                "unit_bind_group",
-                &unit_pipeline.update_layout,
+                "unit_evaluate_bind_group",
+                &unit_pipeline.evaluate_layout,
                 &BindGroupEntries::with_indices((
                     (0, view_binding(world)),
                     (9, globals_binding(world)),
                     (101, &unit_data_texture.a.default_view),
                     (102, commands_uniform.as_entire_binding()),
+                    (103, &unit_data_texture.attack_b.default_view),
                 )),
             );
 
             let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
                 label: Some("unit_pass"),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &unit_data_texture.b.default_view,
-                    resolve_target: None,
-                    ops: Operations::default(),
-                })],
+                color_attachments: &[
+                    Some(RenderPassColorAttachment {
+                        view: &unit_data_texture.b.default_view,
+                        resolve_target: None,
+                        ops: Operations::default(),
+                    }),
+                    Some(RenderPassColorAttachment {
+                        view: &unit_data_texture.attack_a.default_view,
+                        resolve_target: None,
+                        ops: Operations::default(),
+                    }),
+                ],
                 depth_stencil_attachment: None,
             });
 
@@ -180,13 +193,14 @@ impl ViewNode for UnitsNode {
             };
 
             let bind_group = render_context.render_device().create_bind_group(
-                "unit_bind_group",
+                "unit_update_bind_group",
                 &unit_pipeline.update_layout,
                 &BindGroupEntries::with_indices((
                     (0, view_binding(world)),
                     (9, globals_binding(world)),
                     (101, &unit_data_texture.b.default_view),
                     (102, commands_uniform.as_entire_binding()),
+                    (103, &unit_data_texture.attack_a.default_view),
                 )),
             );
 
@@ -216,13 +230,14 @@ impl ViewNode for UnitsNode {
             };
 
             let bind_group = render_context.render_device().create_bind_group(
-                "unit_bind_group",
+                "unit_draw_bind_group",
                 &unit_pipeline.draw_layout,
                 &BindGroupEntries::with_indices((
                     (0, view_binding(world)),
                     (9, globals_binding(world)),
                     (101, &unit_data_texture.a.default_view),
                     (102, commands_uniform.as_entire_binding()),
+                    (103, &unit_data_texture.attack_a.default_view),
                 )),
             );
 
@@ -271,11 +286,26 @@ struct UnitPipeline {
     update_pipeline_id: CachedRenderPipelineId,
     draw_pipeline_id: CachedRenderPipelineId,
     evaluate_pipeline_id: CachedRenderPipelineId,
+    evaluate_layout: BindGroupLayout,
 }
 
 impl FromWorld for UnitPipeline {
     fn from_world(world: &mut World) -> Self {
+        let mut shader_defs = Vec::new();
+        shader_defs.extend_from_slice(&[shader_def_uint!(ATTACK_RADIUS)]);
+
         let render_device = world.resource::<RenderDevice>();
+
+        let evaluate_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("unit_evaluate_bind_group_layout"),
+            entries: &[
+                view_layout_entry(0),
+                globals_layout_entry(9),
+                utexture_layout_entry(101, TextureViewDimension::D2), // Prev Particle State
+                uniform_layout_entry(102, UnitCommand::min_size()),
+                utexture_layout_entry(103, TextureViewDimension::D2), // Prev Attack data
+            ],
+        });
 
         let update_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             label: Some("unit_update_bind_group_layout"),
@@ -284,6 +314,7 @@ impl FromWorld for UnitPipeline {
                 globals_layout_entry(9),
                 utexture_layout_entry(101, TextureViewDimension::D2), // Prev Particle State
                 uniform_layout_entry(102, UnitCommand::min_size()),
+                utexture_layout_entry(103, TextureViewDimension::D2), // Attack data
             ],
         });
 
@@ -294,6 +325,7 @@ impl FromWorld for UnitPipeline {
                 globals_layout_entry(9),
                 utexture_layout_entry(101, TextureViewDimension::D2), // Current Particle State
                 uniform_layout_entry(102, UnitCommand::min_size()),
+                utexture_layout_entry(103, TextureViewDimension::D2), // Attack data
             ],
         });
         let shader = world
@@ -305,19 +337,26 @@ impl FromWorld for UnitPipeline {
                 .resource_mut::<PipelineCache>()
                 .queue_render_pipeline(RenderPipelineDescriptor {
                     label: Some("unit_evaluate_pipeline".into()),
-                    layout: vec![update_layout.clone()],
+                    layout: vec![evaluate_layout.clone()],
 
                     vertex: fullscreen_shader_vertex_state(),
                     fragment: Some(FragmentState {
                         shader: shader.clone(),
-                        shader_defs: vec![],
+                        shader_defs: shader_defs.clone(),
 
                         entry_point: "fragment".into(),
-                        targets: vec![Some(ColorTargetState {
-                            format: UNITS_DATA_FORMAT,
-                            blend: None,
-                            write_mask: ColorWrites::ALL,
-                        })],
+                        targets: vec![
+                            Some(ColorTargetState {
+                                format: UNITS_DATA_FORMAT,
+                                blend: None,
+                                write_mask: ColorWrites::ALL,
+                            }),
+                            Some(ColorTargetState {
+                                format: UNITS_ATTACK_FORMAT,
+                                blend: None,
+                                write_mask: ColorWrites::ALL,
+                            }),
+                        ],
                     }),
 
                     primitive: PrimitiveState::default(),
@@ -340,7 +379,7 @@ impl FromWorld for UnitPipeline {
                     vertex: fullscreen_shader_vertex_state(),
                     fragment: Some(FragmentState {
                         shader: shader.clone(),
-                        shader_defs: vec![],
+                        shader_defs: shader_defs.clone(),
 
                         entry_point: "fragment".into(),
                         targets: vec![Some(ColorTargetState {
@@ -369,13 +408,13 @@ impl FromWorld for UnitPipeline {
 
                     vertex: VertexState {
                         shader: shader.clone(),
-                        shader_defs: Vec::new(),
+                        shader_defs: shader_defs.clone(),
                         entry_point: "vertex".into(),
                         buffers: Vec::new(),
                     },
                     fragment: Some(FragmentState {
                         shader: shader.clone(),
-                        shader_defs: vec![],
+                        shader_defs: shader_defs.clone(),
 
                         entry_point: "fragment".into(),
                         targets: vec![
@@ -409,6 +448,7 @@ impl FromWorld for UnitPipeline {
             draw_pipeline_id,
             update_layout,
             update_pipeline_id,
+            evaluate_layout,
             evaluate_pipeline_id,
         }
     }
@@ -418,6 +458,8 @@ impl FromWorld for UnitPipeline {
 pub struct UnitsDataTextures {
     pub a: CachedTexture,
     pub b: CachedTexture,
+    attack_a: CachedTexture,
+    attack_b: CachedTexture,
 }
 
 fn prepare_textures(
@@ -446,25 +488,32 @@ fn prepare_textures(
         };
 
         texture_descriptor.label = Some("unit_data_a");
-        let ssgi_resolve_texture_a = texture_cache.get(&render_device, texture_descriptor.clone());
+        let unit_data_texture_a = texture_cache.get(&render_device, texture_descriptor.clone());
         texture_descriptor.label = Some("unit_data_b");
-        let ssgi_resolve_texture_b = texture_cache.get(&render_device, texture_descriptor.clone());
+        let unit_data_texture_b = texture_cache.get(&render_device, texture_descriptor.clone());
+
+        texture_descriptor.format = UNITS_ATTACK_FORMAT;
+        texture_descriptor.label = Some("unit_damage_map");
+        let unit_damage_texture_a = texture_cache.get(&render_device, texture_descriptor.clone());
+        texture_descriptor.format = UNITS_ATTACK_FORMAT;
+        texture_descriptor.label = Some("unit_damage_map");
+        let unit_damage_texture_b = texture_cache.get(&render_device, texture_descriptor.clone());
 
         let textures = if frame_count.0 % 2 == 0 {
             UnitsDataTextures {
-                b: ssgi_resolve_texture_a,
-                a: ssgi_resolve_texture_b,
+                b: unit_data_texture_a,
+                a: unit_data_texture_b,
+                attack_a: unit_damage_texture_a,
+                attack_b: unit_damage_texture_b,
             }
         } else {
-            // Using the same for both since a flip flop happens in the node
+            // Using the same for both unit data since a flip flop happens in the node
             UnitsDataTextures {
-                b: ssgi_resolve_texture_a,
-                a: ssgi_resolve_texture_b,
+                b: unit_data_texture_a,
+                a: unit_data_texture_b,
+                attack_a: unit_damage_texture_b,
+                attack_b: unit_damage_texture_a,
             }
-            //ParticlesDataTextures {
-            //    write: ssgi_resolve_texture_b,
-            //    read: ssgi_resolve_texture_a,
-            //}
         };
         commands.entity(entity).insert(textures);
     }

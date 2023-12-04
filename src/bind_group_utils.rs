@@ -181,7 +181,7 @@ pub fn lights_binding(world: &World) -> BindingResource<'_> {
 #[macro_export]
 macro_rules! shader_def_uint {
     ($var:expr) => {
-        ShaderDefVal::UInt(stringify!($var).into(), $var as u32)
+        bevy::render::render_resource::ShaderDefVal::UInt(stringify!($var).into(), $var as u32)
     };
 }
 

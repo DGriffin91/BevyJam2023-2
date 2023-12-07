@@ -150,6 +150,7 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     var index = 7;
     // TODO optimize 
     if unit.progress > 0.0 {
+        index = select(index, 0, all(unit.step_dir == vec2( 1,  0)));
         index = select(index, 1, all(unit.step_dir == vec2( 1, -1)));
         index = select(index, 2, all(unit.step_dir == vec2( 0, -1)));
         index = select(index, 3, all(unit.step_dir == vec2(-1, -1)));

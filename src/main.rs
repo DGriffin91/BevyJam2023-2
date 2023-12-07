@@ -1,6 +1,7 @@
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
 pub mod bind_group_utils;
+pub mod camera_controller;
 pub mod minimap;
 pub mod particles;
 pub mod post_process;
@@ -27,6 +28,7 @@ use bevy_mod_taa::{
     disocclusion::DisocclusionSettings, fxaa::FxaaPrepass, TAABundle, TAAPlugin, TAASettings,
 };
 use bevy_ridiculous_ssgi::{ssgi::SSGIPass, SSGIBundle, SSGIPlugin};
+use camera_controller::{OrthoCameraController, OrthoCameraControllerPlugin};
 use minimap::{MinimapPass, MinimapPlugin};
 use particles::{ParticleCommand, ParticlesPass, ParticlesPlugin};
 use post_process::PostProcessPlugin;
@@ -46,34 +48,31 @@ fn main() {
         .add_plugins(
             DefaultPlugins
                 .set(PbrPlugin {
-                    add_default_deferred_lighting_plugin: false,
+                    add_default_deferred_lighting_plugin: true,
                     ..default()
                 })
                 .set(WindowPlugin {
                     primary_window: Some(Window {
-                        present_mode: PresentMode::AutoVsync,
+                        present_mode: PresentMode::AutoNoVsync,
                         ..default()
                     }),
                     ..default()
                 }),
         )
         .add_plugins((
-            CameraControllerPlugin,
+            OrthoCameraControllerPlugin,
             ParticlesPlugin,
             UnitsPlugin,
             TAAPlugin,
             MinimapPlugin,
-            SSGIPlugin,
+            //SSGIPlugin, // If you turn this off use the default lighting plugin
             PostProcessPlugin,
             LogDiagnosticsPlugin::default(),
             FrameTimeDiagnosticsPlugin::default(),
             ExtractResourcePlugin::<UnitTexture>::default(),
         ))
         .add_systems(Startup, (setup, load_unit_texture))
-        .add_systems(
-            Update,
-            (restart_particle_system, command_units, update_camera),
-        )
+        .add_systems(Update, (restart_particle_system, command_units))
         .run();
 }
 
@@ -155,9 +154,11 @@ fn setup(
                     hdr: true,
                     ..default()
                 },
-                transform: cam_rot.with_translation(-cam_rot.forward() * 100.0),
+                transform: cam_rot.with_translation(-cam_rot.forward() * 500.0),
                 projection: Projection::Orthographic(OrthographicProjection {
                     scale: 0.011,
+                    far: 2000.0,
+                    near: 0.0,
                     ..default()
                 }),
                 ..default()
@@ -167,11 +168,10 @@ fn setup(
             MinimapPass,
             DeferredPrepass,
             DepthPrepass,
+            MotionVectorPrepass,
         ))
-        .insert(CameraController {
+        .insert(OrthoCameraController {
             mouse_key_enable_mouse: MouseButton::Middle,
-            run_speed: 150.0,
-            walk_speed: 50.0,
             ..default()
         })
         .insert((
@@ -184,7 +184,7 @@ fn setup(
         ))
         .insert(SSGIBundle {
             ssgi_pass: SSGIPass {
-                brightness: 10.0,
+                brightness: 6.0,
                 square_falloff: true,
                 horizon_occlusion: 100.0,
                 render_scale: 6,
@@ -200,37 +200,6 @@ fn setup(
             },
             ..default()
         });
-}
-
-fn update_camera(
-    mut camera: Query<(&mut Transform, &mut Projection, &mut Camera)>,
-    mut scroll_evr: EventReader<MouseWheel>,
-) {
-    let Some((camera_trans, mut projection, _camera)) = camera.iter_mut().next() else {
-        return;
-    };
-    match projection.as_mut() {
-        Projection::Orthographic(o) => {
-            let mut scroll_distance = 0.0;
-            for ev in scroll_evr.read() {
-                match ev.unit {
-                    MouseScrollUnit::Line => {
-                        scroll_distance = ev.y;
-                    }
-                    MouseScrollUnit::Pixel => (),
-                }
-            }
-            if scroll_distance > 0.0 {
-                o.scale /= 1.2 * scroll_distance.abs();
-            }
-            if scroll_distance < 0.0 {
-                o.scale *= 1.2 * scroll_distance.abs();
-            }
-        }
-        Projection::Perspective(_) => (),
-    }
-    //let v = camera_trans.rotation.to_euler(EulerRot::ZYX);
-    //dbg!(v.0.to_degrees(), v.1.to_degrees(), v.2.to_degrees());
 }
 
 fn restart_particle_system(mut commands: Commands, mouse_button_input: Res<Input<MouseButton>>) {

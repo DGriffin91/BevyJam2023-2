@@ -23,7 +23,13 @@ bevy_mod_taa = { git = "https://github.com/DGriffin91/bevy_mod_taa" }
 bytemuck = "1.14.0"
 bevy_ridiculous_ssgi = { git = "https://github.com/DGriffin91/bevy_ridiculous_ssgi" }
 shared_exponent_formats = { git = "https://github.com/DGriffin91/shared_exponent_formats" }
-
+wgpu = { version = "0.17.1", features = [
+    "naga",
+    "fragile-send-sync-non-atomic-wasm",
+] }
+async-channel = "2.1.1"
+pollster = "0.3.0"
+futures-intrusive = "0.5.0"
 
 [features]
 file_watcher = ["bevy/file_watcher"]

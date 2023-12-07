@@ -11,6 +11,7 @@ use bevy::{
         camera::ExtractedCamera,
         extract_component::{ExtractComponent, ExtractComponentPlugin},
         extract_resource::{ExtractResource, ExtractResourcePlugin},
+        render_asset::RenderAssets,
         render_graph::{
             NodeRunError, RenderGraphApp, RenderGraphContext, ViewNode, ViewNodeRunner,
         },
@@ -33,7 +34,7 @@ use crate::{
         uniform_buffer, uniform_layout_entry, utexture_layout_entry, view_binding,
         view_layout_entry,
     },
-    shader_def_uint,
+    image, resource, shader_def_uint, UnitTexture,
 };
 
 pub const UNITS_DATA_FORMAT: TextureFormat = TextureFormat::Rgba32Uint;
@@ -128,6 +129,9 @@ impl ViewNode for UnitsNode {
             .clone()
             .unwrap();
 
+        let images = world.resource::<RenderAssets<Image>>();
+        let unit_texture = image!(images, &resource!(world, UnitTexture).0);
+
         // ---------------------------------------
         // Units Evaluate
         // ---------------------------------------
@@ -150,6 +154,7 @@ impl ViewNode for UnitsNode {
                     (101, &unit_data_texture.a.default_view),
                     (102, commands_uniform.as_entire_binding()),
                     (103, &unit_data_texture.attack_b.default_view),
+                    (104, &unit_texture.texture_view),
                 )),
             );
 
@@ -190,6 +195,7 @@ impl ViewNode for UnitsNode {
                     (101, &unit_data_texture.b.default_view),
                     (102, commands_uniform.as_entire_binding()),
                     (103, &unit_data_texture.attack_a.default_view),
+                    (104, &unit_texture.texture_view),
                 )),
             );
 
@@ -223,6 +229,7 @@ impl ViewNode for UnitsNode {
                     (101, &unit_data_texture.a.default_view),
                     (102, commands_uniform.as_entire_binding()),
                     (103, &unit_data_texture.attack_a.default_view),
+                    (104, &unit_texture.texture_view),
                 )),
             );
 
@@ -281,6 +288,7 @@ impl FromWorld for UnitPipeline {
                 utexture_layout_entry(101, TextureViewDimension::D2), // Prev Particle State
                 uniform_layout_entry(102, UnitCommand::min_size()),
                 utexture_layout_entry(103, TextureViewDimension::D2), // Prev Attack data
+                utexture_layout_entry(104, TextureViewDimension::D2Array), // Unit Texture
             ],
         };
 

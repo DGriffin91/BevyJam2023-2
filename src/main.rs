@@ -6,20 +6,25 @@ pub mod particles;
 pub mod post_process;
 pub mod units;
 
+use std::f32::consts::FRAC_PI_4;
+
 use bevy::{
     asset::AssetMetaCheck,
     core_pipeline::{
         fxaa::Fxaa,
-        prepass::{DeferredPrepass, DepthPrepass},
+        prepass::{DeferredPrepass, DepthPrepass, MotionVectorPrepass},
     },
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     math::*,
-    pbr::{DefaultOpaqueRendererMethod, PbrPlugin},
+    pbr::{DefaultOpaqueRendererMethod, NotShadowCaster, PbrPlugin},
     prelude::*,
+    render::extract_resource::{ExtractResource, ExtractResourcePlugin},
     window::{PresentMode, PrimaryWindow},
 };
 use bevy_basic_camera::{CameraController, CameraControllerPlugin};
-use bevy_mod_taa::{TAABundle, TAAPlugin};
+use bevy_mod_taa::{
+    disocclusion::DisocclusionSettings, fxaa::FxaaPrepass, TAABundle, TAAPlugin, TAASettings,
+};
 use bevy_ridiculous_ssgi::{ssgi::SSGIPass, SSGIBundle, SSGIPlugin};
 use minimap::{MinimapPass, MinimapPlugin};
 use particles::{ParticleCommand, ParticlesPass, ParticlesPlugin};
@@ -34,18 +39,18 @@ fn main() {
         .insert_resource(ClearColor(Color::rgb(0.0, 0.0, 0.0)))
         .insert_resource(AmbientLight {
             color: Color::rgb(1.0, 1.0, 1.0),
-            brightness: 0.01,
+            brightness: 0.5,
         })
         .insert_resource(DefaultOpaqueRendererMethod::deferred())
         .add_plugins(
             DefaultPlugins
                 .set(PbrPlugin {
-                    add_default_deferred_lighting_plugin: true,
+                    add_default_deferred_lighting_plugin: false,
                     ..default()
                 })
                 .set(WindowPlugin {
                     primary_window: Some(Window {
-                        present_mode: PresentMode::AutoNoVsync,
+                        present_mode: PresentMode::AutoVsync,
                         ..default()
                     }),
                     ..default()
@@ -57,12 +62,13 @@ fn main() {
             UnitsPlugin,
             TAAPlugin,
             MinimapPlugin,
-            //SSGIPlugin,
+            SSGIPlugin,
             PostProcessPlugin,
             LogDiagnosticsPlugin::default(),
             FrameTimeDiagnosticsPlugin::default(),
+            ExtractResourcePlugin::<UnitTexture>::default(),
         ))
-        .add_systems(Startup, setup)
+        .add_systems(Startup, (setup, load_unit_texture))
         .add_systems(Update, (restart_particle_system, command_units))
         .run();
 }
@@ -71,6 +77,7 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
 ) {
     // Water
     commands.spawn(PbrBundle {
@@ -81,7 +88,11 @@ fn setup(
             }
             .into(),
         ),
-        material: materials.add(Color::rgb(0.6, 0.6, 0.6).into()),
+        material: materials.add(StandardMaterial {
+            base_color: Vec4::splat(0.01).into(),
+            reflectance: 0.01,
+            ..default()
+        }),
         ..default()
     });
 
@@ -92,22 +103,38 @@ fn setup(
     //    ..default()
     //});
 
+    // vvv Lighting is broken without this, don't delete vvv
+    commands.spawn((
+        PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Cube { size: 100000.0 })),
+            material: materials.add(StandardMaterial {
+                base_color: Vec4::splat(0.0).into(),
+                double_sided: true,
+                cull_mode: None,
+                unlit: true,
+                ..default()
+            }),
+            transform: Transform::from_xyz(0.0, 1.0, 0.0),
+            ..default()
+        },
+        NotShadowCaster,
+    ));
+
+    commands.spawn(SceneBundle {
+        scene: asset_server.load("models/FlightHelmet/FlightHelmet.gltf#Scene0"),
+        ..default()
+    });
+
     // light
-    //commands.spawn(DirectionalLightBundle {
-    //    directional_light: DirectionalLight {
-    //        shadows_enabled: true,
-    //        illuminance: 100000.0,
-    //        ..default()
-    //    },
-    //    cascade_shadow_config: CascadeShadowConfigBuilder {
-    //        num_cascades: 2,
-    //        maximum_distance: 20.0,
-    //        ..default()
-    //    }
-    //    .into(),
-    //    transform: Transform::from_rotation(Quat::from_euler(EulerRot::ZYX, 0.0, 0.0, -FRAC_PI_4)),
-    //    ..default()
-    //});
+    commands.spawn(DirectionalLightBundle {
+        directional_light: DirectionalLight {
+            shadows_enabled: false,
+            illuminance: 100000.0,
+            ..default()
+        },
+        transform: Transform::from_rotation(Quat::from_euler(EulerRot::ZYX, 0.0, 0.0, -FRAC_PI_4)),
+        ..default()
+    });
 
     // camera
     commands
@@ -133,10 +160,17 @@ fn setup(
             walk_speed: 50.0,
             ..default()
         })
-        .insert(Fxaa::default())
+        .insert((
+            FxaaPrepass::default(),
+            TAASettings::default(),
+            //TemporalJitter,
+            MotionVectorPrepass,
+            //NormalPrepass,
+            DisocclusionSettings::default(),
+        ))
         .insert(SSGIBundle {
             ssgi_pass: SSGIPass {
-                brightness: 1.0,
+                brightness: 10.0,
                 square_falloff: true,
                 horizon_occlusion: 100.0,
                 render_scale: 6,
@@ -224,4 +258,11 @@ fn command_units(
             }
         }
     }
+}
+
+#[derive(Resource, ExtractResource, Clone)]
+pub struct UnitTexture(pub Handle<Image>);
+
+pub fn load_unit_texture(mut commands: Commands, ass: Res<AssetServer>) {
+    commands.insert_resource(UnitTexture(ass.load("helmit.ktx2")));
 }

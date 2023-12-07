@@ -81,12 +81,9 @@ fn cosine_sample_hemisphere(urand: vec2<f32>) -> vec3<f32> {
     return vec3(x, y, sqrt(max(0.0, 1.0 - urand.x)));
 }
 
-const M_PLASTIC = 1.32471795724474602596;
-
-fn r2_sequence(i: u32) -> vec2<f32> {
-    let a1 = 1.0 / M_PLASTIC;
-    let a2 = 1.0 / (M_PLASTIC * M_PLASTIC);
-    return fract(vec2(a1, a2) * f32(i) + 0.5);
+// http://extremelearning.com.au/unreasonable-effectiveness-of-quasirandom-sequences/
+fn r2_sequence(n: u32) -> vec2<f32> {
+	return fract(vec2<f32>(vec2(n)) * vec2(0.7548776662466928, 0.5698402909980533));
 }
 
 /*

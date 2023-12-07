@@ -15,6 +15,7 @@ use bevy::{
         prepass::{DeferredPrepass, DepthPrepass, MotionVectorPrepass},
     },
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
+    input::mouse::{MouseScrollUnit, MouseWheel},
     math::*,
     pbr::{DefaultOpaqueRendererMethod, NotShadowCaster, PbrPlugin},
     prelude::*,
@@ -69,7 +70,10 @@ fn main() {
             ExtractResourcePlugin::<UnitTexture>::default(),
         ))
         .add_systems(Startup, (setup, load_unit_texture))
-        .add_systems(Update, (restart_particle_system, command_units))
+        .add_systems(
+            Update,
+            (restart_particle_system, command_units, update_camera),
+        )
         .run();
 }
 
@@ -136,6 +140,13 @@ fn setup(
         ..default()
     });
 
+    let cam_rot = Transform::from_rotation(Quat::from_euler(
+        EulerRot::ZYX,
+        180.0_f32.to_radians(),
+        -45.0_f32.to_radians(),
+        135.0_f32.to_radians(),
+    ));
+
     // camera
     commands
         .spawn((
@@ -144,8 +155,11 @@ fn setup(
                     hdr: true,
                     ..default()
                 },
-                transform: Transform::from_xyz(-30.0, 200.0, -30.0)
-                    .looking_at(vec3(150.8, 0.0, 150.8), Vec3::Y),
+                transform: cam_rot.with_translation(-cam_rot.forward() * 100.0),
+                projection: Projection::Orthographic(OrthographicProjection {
+                    scale: 0.011,
+                    ..default()
+                }),
                 ..default()
             },
             UnitsPass,
@@ -186,6 +200,37 @@ fn setup(
             },
             ..default()
         });
+}
+
+fn update_camera(
+    mut camera: Query<(&mut Transform, &mut Projection, &mut Camera)>,
+    mut scroll_evr: EventReader<MouseWheel>,
+) {
+    let Some((camera_trans, mut projection, _camera)) = camera.iter_mut().next() else {
+        return;
+    };
+    match projection.as_mut() {
+        Projection::Orthographic(o) => {
+            let mut scroll_distance = 0.0;
+            for ev in scroll_evr.read() {
+                match ev.unit {
+                    MouseScrollUnit::Line => {
+                        scroll_distance = ev.y;
+                    }
+                    MouseScrollUnit::Pixel => (),
+                }
+            }
+            if scroll_distance > 0.0 {
+                o.scale /= 1.2 * scroll_distance.abs();
+            }
+            if scroll_distance < 0.0 {
+                o.scale *= 1.2 * scroll_distance.abs();
+            }
+        }
+        Projection::Perspective(_) => (),
+    }
+    //let v = camera_trans.rotation.to_euler(EulerRot::ZYX);
+    //dbg!(v.0.to_degrees(), v.1.to_degrees(), v.2.to_degrees());
 }
 
 fn restart_particle_system(mut commands: Commands, mouse_button_input: Res<Input<MouseButton>>) {

@@ -147,15 +147,17 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
 
     let uv = vec2(in.uv.x, 1.0 - in.uv.y);
     let mip = 1; //TODO select mip
-    var index = 0;
+    var index = 7;
     // TODO optimize 
-    index = select(index, 1, all(unit.step_dir == vec2( 1, -1)));
-    index = select(index, 2, all(unit.step_dir == vec2( 0, -1)));
-    index = select(index, 3, all(unit.step_dir == vec2(-1, -1)));
-    index = select(index, 4, all(unit.step_dir == vec2(-1,  0)));
-    index = select(index, 5, all(unit.step_dir == vec2(-1,  1)));
-    index = select(index, 6, all(unit.step_dir == vec2( 0,  1)));
-    index = select(index, 7, all(unit.step_dir == vec2( 1,  1)));
+    if unit.progress > 0.0 {
+        index = select(index, 1, all(unit.step_dir == vec2( 1, -1)));
+        index = select(index, 2, all(unit.step_dir == vec2( 0, -1)));
+        index = select(index, 3, all(unit.step_dir == vec2(-1, -1)));
+        index = select(index, 4, all(unit.step_dir == vec2(-1,  0)));
+        index = select(index, 5, all(unit.step_dir == vec2(-1,  1)));
+        index = select(index, 6, all(unit.step_dir == vec2( 0,  1)));
+        index = select(index, 7, all(unit.step_dir == vec2( 1,  1)));
+    }
 
     let dims = vec2<f32>(textureDimensions(unit_texture, mip).xy);
     let data = textureLoad(unit_texture, vec2<i32>(uv * dims), u32(index), mip);

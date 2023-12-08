@@ -58,7 +58,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
     if unit.mode == com::UNIT_MODE_MOVEING {
         // Will look funny at 1000FPS
         if distance(unit.dest, unit.pos) > 0.1 {
-            unit.pos += clamp(normalize(unit.dest - unit.pos), vec2(-1.0), vec2(1.0)) * com::LARGE_SPEED_MOVE * command.delta_time; //globals.delta_time 
+            unit.pos += clamp(normalize(unit.dest - unit.pos), vec2(-1.0), vec2(1.0)) * com::LARGE_SPEED_MOVE * globals.delta_time;
         } else {
             unit.mode = com::UNIT_MODE_IDLE;
         }
@@ -78,6 +78,19 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
             unit.dest += roam_rng * com::LARGE_UNIT_SIZE;
             unit.mode = com::UNIT_MODE_MOVEING;
         }
+    }
+
+    if unit.mode == com::UNIT_MODE_MOVEING {
+        // TODO optimize 
+        let step_dir = com::sign2i(vec2<i32>(unit.dest - unit.pos));
+        unit.dir_index = select(unit.dir_index, 0u, all(step_dir == vec2( 1,  0)));
+        unit.dir_index = select(unit.dir_index, 1u, all(step_dir == vec2( 1, -1)));
+        unit.dir_index = select(unit.dir_index, 2u, all(step_dir == vec2( 0, -1)));
+        unit.dir_index = select(unit.dir_index, 3u, all(step_dir == vec2(-1, -1)));
+        unit.dir_index = select(unit.dir_index, 4u, all(step_dir == vec2(-1,  0)));
+        unit.dir_index = select(unit.dir_index, 5u, all(step_dir == vec2(-1,  1)));
+        unit.dir_index = select(unit.dir_index, 6u, all(step_dir == vec2( 0,  1)));
+        unit.dir_index = select(unit.dir_index, 7u, all(step_dir == vec2( 1,  1)));
     }
 
     return com::pack_large_unit(unit);

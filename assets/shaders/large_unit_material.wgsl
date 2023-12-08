@@ -149,29 +149,18 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     color = select(color, vec3(0.0, 0.0, 0.0), unit.team == 0u);
     //pbr.material.base_color = vec4(color, 1.0);
 
-    let step_dir = com::sign2i(vec2<i32>(unit.dest - unit.pos));
 
     let uv = vec2(in.uv.x, 1.0 - in.uv.y);
     let mip = 0u; //TODO select mip, TODO only mip 0 works in WebGL2
     var index = 7;
-    // TODO optimize 
-    //if unit.progress > 0.0 {
-        index = select(index, 0, all(step_dir == vec2( 1,  0)));
-        index = select(index, 1, all(step_dir == vec2( 1, -1)));
-        index = select(index, 2, all(step_dir == vec2( 0, -1)));
-        index = select(index, 3, all(step_dir == vec2(-1, -1)));
-        index = select(index, 4, all(step_dir == vec2(-1,  0)));
-        index = select(index, 5, all(step_dir == vec2(-1,  1)));
-        index = select(index, 6, all(step_dir == vec2( 0,  1)));
-        index = select(index, 7, all(step_dir == vec2( 1,  1)));
-    //}
+
 
     //let dims = vec2<f32>(textureDimensions(unit_texture).xy) / f32(1u << mip);
     //let data = bitcast<vec2<u32>>(textureLoad(unit_texture, vec2<i32>(uv * dims), u32(index), i32(mip)).xy);
     // Cursed, but work on both webgl2 and native
     // Discussion: https://discord.com/channels/691052431525675048/743663924229963868/1182466862190186627
     //let data = bitcast<vec2<u32>>(textureSampleLevel(unit_texture, nearest_sampler, uv, u32(index), f32(mip)));
-    let data = bitcast<vec2<u32>>(textureSample(unit_texture, nearest_sampler, uv, u32(index)));
+    let data = bitcast<vec2<u32>>(textureSample(unit_texture, nearest_sampler, uv, unit.dir_index));
     pbr = com::decompress_gbuffer(frag_coord, data.xy);
     
 

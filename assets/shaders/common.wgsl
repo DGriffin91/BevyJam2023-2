@@ -87,6 +87,7 @@ struct LargeUnit {
     mode: u32,
     progress: f32,
     team: u32,
+    dir_index: u32,
 }
 
 fn unpack_large_unit(data: vec4<u32>, ufrag_coord: vec2<u32>) -> LargeUnit {
@@ -106,6 +107,7 @@ fn unpack_large_unit(data: vec4<u32>, ufrag_coord: vec2<u32>) -> LargeUnit {
     let d1 = unpack_4x8_(data.w);
     unit.health = d1.x;
     unit.mode = d1.y;
+    unit.dir_index = d1.z;
     unit.team = select(1u, 2u, ufrag_coord.y == 1u);
 
     return unit;
@@ -124,7 +126,7 @@ fn pack_large_unit(unit: LargeUnit) -> vec4<u32> {
     data.x = bitcast<u32>(unit.pos.x);
     data.y = bitcast<u32>(unit.pos.y);
     data.z = pack2x16float(unit.dest * 100.0);
-    data.w = pack_4x8_(vec4(unit.health, unit.mode, 0u, 0u));
+    data.w = pack_4x8_(vec4(unit.health, unit.mode, unit.dir_index, 0u));
 
     return data;
 }

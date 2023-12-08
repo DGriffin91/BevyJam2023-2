@@ -278,5 +278,5 @@ fn command_units(
 pub struct UnitTexture(pub Handle<Image>);
 
 pub fn load_unit_texture(mut commands: Commands, ass: Res<AssetServer>) {
-    commands.insert_resource(UnitTexture(ass.load("helmit.ktx2")));
+    commands.insert_resource(UnitTexture(ass.load("helmet.ktx2")));
 }

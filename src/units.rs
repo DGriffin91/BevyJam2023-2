@@ -1,3 +1,4 @@
+use bevy::render::render_resource::*;
 use bevy::{
     core::FrameCount,
     core_pipeline::{
@@ -17,7 +18,7 @@ use bevy::{
         },
         render_resource::{
             BindGroupEntries, BindGroupLayout, BindGroupLayoutDescriptor, CachedRenderPipelineId,
-            Extent3d, PipelineCache, RenderPassDescriptor, ShaderType, TextureDescriptor,
+            Extent3d, PipelineCache, RenderPassDescriptor, Sampler, ShaderType, TextureDescriptor,
             TextureDimension, TextureFormat, TextureUsages, TextureViewDimension,
         },
         renderer::{RenderContext, RenderDevice},
@@ -27,12 +28,13 @@ use bevy::{
     },
 };
 
+use crate::bind_group_utils::ftexture_layout_entry;
 use crate::{
     bind_group_utils::{
-        basic_fullscreen_tri_pipeline, basic_opaque_pipeline, globals_binding,
-        globals_layout_entry, load_color_attachment, load_depth_attachment, opaque_target,
-        uniform_buffer, uniform_layout_entry, utexture_layout_entry, view_binding,
-        view_layout_entry,
+        basic_fullscreen_tri_pipeline, basic_opaque_pipeline, fsampler_layout_entry,
+        globals_binding, globals_layout_entry, load_color_attachment, load_depth_attachment,
+        nearest_sampler, nsampler_layout_entry, opaque_target, uniform_buffer,
+        uniform_layout_entry, utexture_layout_entry, view_binding, view_layout_entry,
     },
     image, resource, shader_def_uint, UnitTexture,
 };
@@ -155,6 +157,7 @@ impl ViewNode for UnitsNode {
                     (102, commands_uniform.as_entire_binding()),
                     (103, &unit_data_texture.attack_b.default_view),
                     (104, &unit_texture.texture_view),
+                    (105, &unit_pipeline.sampler),
                 )),
             );
 
@@ -196,6 +199,7 @@ impl ViewNode for UnitsNode {
                     (102, commands_uniform.as_entire_binding()),
                     (103, &unit_data_texture.attack_a.default_view),
                     (104, &unit_texture.texture_view),
+                    (105, &unit_pipeline.sampler),
                 )),
             );
 
@@ -230,6 +234,7 @@ impl ViewNode for UnitsNode {
                     (102, commands_uniform.as_entire_binding()),
                     (103, &unit_data_texture.attack_a.default_view),
                     (104, &unit_texture.texture_view),
+                    (105, &unit_pipeline.sampler),
                 )),
             );
 
@@ -264,6 +269,7 @@ impl ViewNode for UnitsNode {
 
 #[derive(Resource)]
 struct UnitPipeline {
+    sampler: Sampler,
     update_layout: BindGroupLayout,
     draw_layout: BindGroupLayout,
     update_pipeline_id: CachedRenderPipelineId,
@@ -288,13 +294,16 @@ impl FromWorld for UnitPipeline {
                 utexture_layout_entry(101, TextureViewDimension::D2), // Prev Particle State
                 uniform_layout_entry(102, UnitCommand::min_size()),
                 utexture_layout_entry(103, TextureViewDimension::D2), // Prev Attack data
-                utexture_layout_entry(104, TextureViewDimension::D2Array), // Unit Texture
+                ftexture_layout_entry(104, TextureViewDimension::D2Array), // Unit Texture
+                fsampler_layout_entry(105),
             ],
         };
 
         let evaluate_layout = render_device.create_bind_group_layout(layout_descriptor);
         let update_layout = render_device.create_bind_group_layout(layout_descriptor);
         let draw_layout = render_device.create_bind_group_layout(layout_descriptor);
+
+        let sampler = nearest_sampler(render_device);
 
         let evaluate_pipeline_id = basic_fullscreen_tri_pipeline(
             "unit_evaluate_pipeline",
@@ -342,6 +351,7 @@ impl FromWorld for UnitPipeline {
         );
 
         Self {
+            sampler,
             draw_layout,
             draw_pipeline_id,
             update_layout,

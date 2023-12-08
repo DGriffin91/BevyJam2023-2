@@ -22,7 +22,10 @@
 @group(0) @binding(101) var data_texture: texture_2d<u32>;
 @group(0) @binding(102) var<uniform> commands: com::UnitCommand;
 @group(0) @binding(103) var attack_texture: texture_2d<u32>;
-@group(0) @binding(104) var unit_texture: texture_2d_array<u32>;
+// Cursed, but work on both webgl2 and native
+// Discussion: https://discord.com/channels/691052431525675048/743663924229963868/1182466862190186627
+@group(0) @binding(104) var unit_texture: texture_2d_array<f32>;
+@group(0) @binding(105) var nearest_sampler: sampler;
 
 struct VertexOutput {
     // this is `clip position` when the struct is used as a vertex stage output 
@@ -144,9 +147,10 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     
     var color = select(vec3(0.4, 0.02, 0.02), vec3(0.02, 0.15, 0.02), unit.team == 1u);
     color = select(color, vec3(0.0, 0.0, 0.0), unit.team == 0u);
+    //pbr.material.base_color = vec4(color, 1.0);
 
     let uv = vec2(in.uv.x, 1.0 - in.uv.y);
-    let mip = 1; //TODO select mip
+    let mip = 0u; //TODO select mip, TODO only mip 0 works in WebGL2
     var index = 7;
     // TODO optimize 
     if unit.progress > 0.0 {
@@ -160,11 +164,14 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
         index = select(index, 7, all(unit.step_dir == vec2( 1,  1)));
     }
 
-    let dims = vec2<f32>(textureDimensions(unit_texture, mip).xy);
-    let data = textureLoad(unit_texture, vec2<i32>(uv * dims), u32(index), mip);
+    //let dims = vec2<f32>(textureDimensions(unit_texture).xy) / f32(1u << mip);
+    //let data = bitcast<vec2<u32>>(textureLoad(unit_texture, vec2<i32>(uv * dims), u32(index), i32(mip)).xy);
+    // Cursed, but work on both webgl2 and native
+    // Discussion: https://discord.com/channels/691052431525675048/743663924229963868/1182466862190186627
+    //let data = bitcast<vec2<u32>>(textureSampleLevel(unit_texture, nearest_sampler, uv, u32(index), f32(mip)));
+    let data = bitcast<vec2<u32>>(textureSample(unit_texture, nearest_sampler, uv, u32(index)));
     pbr = decompress_gbuffer(frag_coord, data.xy);
     
-    //pbr.material.base_color = vec4(color, 1.0);
 
     out.deferred = deferred_gbuffer_from_pbr_input(pbr);
     out.deferred_lighting_pass_id = 1u;

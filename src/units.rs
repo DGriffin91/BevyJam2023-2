@@ -44,13 +44,16 @@ pub const UNITS_ATTACK_FORMAT: TextureFormat = TextureFormat::Rgba8Uint;
 pub const UNITS_DATA_WIDTH: u32 = 512;
 pub const UNITS_DATA_HEIGHT: u32 = 512;
 pub const ATTACK_RADIUS: u32 = 5;
+pub const LARGE_UNITS_DATA_FORMAT: TextureFormat = TextureFormat::Rgba32Uint;
+pub const LARGE_UNITS_DATA_WIDTH: u32 = 65;
+pub const LARGE_UNITS_DATA_HEIGHT: u32 = 2;
 
 #[derive(Resource, Clone, ExtractResource, Copy, ShaderType, Debug, Default)]
 pub struct UnitCommand {
     pub select_region: UVec4,
     pub dest: UVec2,
     pub command: u32,
-    pub padding: u32,
+    pub delta_time: f32,
 }
 
 pub struct UnitsPlugin;
@@ -122,6 +125,7 @@ impl ViewNode for UnitsNode {
     ) -> Result<(), NodeRunError> {
         let unit_pipeline = world.resource::<UnitPipeline>();
         let unit_command = world.resource::<UnitCommand>();
+        let time = world.resource::<Time>();
 
         let pipeline_cache = world.resource::<PipelineCache>();
 
@@ -137,6 +141,9 @@ impl ViewNode for UnitsNode {
         // ---------------------------------------
         // Units Evaluate
         // ---------------------------------------
+
+        let mut unit_command = unit_command.clone();
+        unit_command.delta_time = time.delta_seconds();
 
         let commands_uniform = uniform_buffer(unit_command, render_context, "Unit Command Uniform");
 
@@ -158,6 +165,7 @@ impl ViewNode for UnitsNode {
                     (103, &unit_data_texture.attack_b.default_view),
                     (104, &unit_texture.texture_view),
                     (105, &unit_pipeline.sampler),
+                    (106, &unit_data_texture.large_unit_a.default_view),
                 )),
             );
 
@@ -200,6 +208,7 @@ impl ViewNode for UnitsNode {
                     (103, &unit_data_texture.attack_a.default_view),
                     (104, &unit_texture.texture_view),
                     (105, &unit_pipeline.sampler),
+                    (106, &unit_data_texture.large_unit_a.default_view),
                 )),
             );
 
@@ -215,6 +224,47 @@ impl ViewNode for UnitsNode {
             render_pass.draw(0..3, 0..1);
         }
 
+        // ---------------------------------------
+        // Large Units Update
+        // ---------------------------------------
+
+        let commands_uniform = uniform_buffer(unit_command, render_context, "Unit Command Uniform");
+
+        {
+            let Some(pipeline) =
+                pipeline_cache.get_render_pipeline(unit_pipeline.large_update_pipeline_id)
+            else {
+                return Ok(());
+            };
+
+            let bind_group = render_context.render_device().create_bind_group(
+                "unit_update_bind_group",
+                &unit_pipeline.large_update_layout,
+                &BindGroupEntries::with_indices((
+                    (0, view_binding(world)),
+                    (9, globals_binding(world)),
+                    (101, &unit_data_texture.a.default_view),
+                    (102, commands_uniform.as_entire_binding()),
+                    (103, &unit_data_texture.attack_a.default_view),
+                    (104, &unit_texture.texture_view),
+                    (105, &unit_pipeline.sampler),
+                    (106, &unit_data_texture.large_unit_a.default_view),
+                )),
+            );
+
+            let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
+                label: Some("Large Units Update"),
+                color_attachments: &[load_color_attachment(
+                    &unit_data_texture.large_unit_b.default_view,
+                )],
+                depth_stencil_attachment: None,
+            });
+
+            render_pass.set_render_pipeline(pipeline);
+            render_pass.set_bind_group(0, &bind_group, &[view_uniform_offset.offset]);
+
+            render_pass.draw(0..3, 0..1);
+        }
         // ---------------------------------------
         // Units Draw
         // ---------------------------------------
@@ -235,6 +285,7 @@ impl ViewNode for UnitsNode {
                     (103, &unit_data_texture.attack_a.default_view),
                     (104, &unit_texture.texture_view),
                     (105, &unit_pipeline.sampler),
+                    (106, &unit_data_texture.large_unit_b.default_view),
                 )),
             );
 
@@ -263,6 +314,49 @@ impl ViewNode for UnitsNode {
             render_pass.set_bind_group(0, &bind_group, &[view_uniform_offset.offset]);
             render_pass.draw(0..UNITS_DATA_WIDTH * UNITS_DATA_HEIGHT * 6, 0..1);
         }
+
+        // ---------------------------------------
+        // Large Units Draw
+        // ---------------------------------------
+        {
+            let Some(pipeline) =
+                pipeline_cache.get_render_pipeline(unit_pipeline.large_draw_pipeline_id)
+            else {
+                return Ok(());
+            };
+
+            let bind_group = render_context.render_device().create_bind_group(
+                "large_unit_draw_bind_group",
+                &unit_pipeline.draw_layout,
+                &BindGroupEntries::with_indices((
+                    (0, view_binding(world)),
+                    (9, globals_binding(world)),
+                    (101, &unit_data_texture.a.default_view),
+                    (102, commands_uniform.as_entire_binding()),
+                    (103, &unit_data_texture.attack_a.default_view),
+                    (104, &unit_texture.texture_view),
+                    (105, &unit_pipeline.sampler),
+                    (106, &unit_data_texture.large_unit_b.default_view),
+                )),
+            );
+
+            let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
+                label: Some("Units Draw"),
+                color_attachments: &[
+                    load_color_attachment(&gbuffer.default_view),
+                    load_color_attachment(&lighting_pass_id.default_view),
+                ],
+                depth_stencil_attachment: load_depth_attachment(&depth.view),
+            });
+
+            // DRAW LARGE UNITS
+            render_pass.set_render_pipeline(pipeline);
+            render_pass.set_bind_group(0, &bind_group, &[view_uniform_offset.offset]);
+            render_pass.draw(
+                0..LARGE_UNITS_DATA_WIDTH * LARGE_UNITS_DATA_HEIGHT * 6,
+                0..1,
+            );
+        }
         Ok(())
     }
 }
@@ -273,16 +367,26 @@ struct UnitPipeline {
     update_layout: BindGroupLayout,
     draw_layout: BindGroupLayout,
     update_pipeline_id: CachedRenderPipelineId,
+    large_update_layout: BindGroupLayout,
+    large_update_pipeline_id: CachedRenderPipelineId,
     draw_pipeline_id: CachedRenderPipelineId,
     evaluate_pipeline_id: CachedRenderPipelineId,
     evaluate_layout: BindGroupLayout,
     draw_projectiles_pipeline_id: CachedRenderPipelineId,
+    large_draw_pipeline_id: CachedRenderPipelineId,
 }
 
 impl FromWorld for UnitPipeline {
     fn from_world(world: &mut World) -> Self {
         let mut shader_defs = Vec::new();
-        shader_defs.extend_from_slice(&[shader_def_uint!(ATTACK_RADIUS)]);
+        shader_defs.extend_from_slice(&[
+            shader_def_uint!(UNITS_DATA_WIDTH),
+            shader_def_uint!(UNITS_DATA_HEIGHT),
+            shader_def_uint!(LARGE_UNITS_DATA_WIDTH),
+            shader_def_uint!(LARGE_UNITS_DATA_HEIGHT),
+            shader_def_uint!(UNITS_DATA_HEIGHT),
+            shader_def_uint!(ATTACK_RADIUS),
+        ]);
 
         let render_device = world.resource::<RenderDevice>();
 
@@ -294,13 +398,15 @@ impl FromWorld for UnitPipeline {
                 utexture_layout_entry(101, TextureViewDimension::D2), // Prev Particle State
                 uniform_layout_entry(102, UnitCommand::min_size()),
                 utexture_layout_entry(103, TextureViewDimension::D2), // Prev Attack data
-                ftexture_layout_entry(104, TextureViewDimension::D2Array), // Unit Texture
+                ftexture_layout_entry(104, TextureViewDimension::D2Array), // Unit Material Texture
                 fsampler_layout_entry(105),
+                utexture_layout_entry(106, TextureViewDimension::D2), // Prev Large Unit Data
             ],
         };
 
         let evaluate_layout = render_device.create_bind_group_layout(layout_descriptor);
         let update_layout = render_device.create_bind_group_layout(layout_descriptor);
+        let large_update_layout = render_device.create_bind_group_layout(layout_descriptor);
         let draw_layout = render_device.create_bind_group_layout(layout_descriptor);
 
         let sampler = nearest_sampler(render_device);
@@ -326,6 +432,15 @@ impl FromWorld for UnitPipeline {
             vec![opaque_target(UNITS_DATA_FORMAT)],
         );
 
+        let large_update_pipeline_id = basic_fullscreen_tri_pipeline(
+            "large_unit_update_pipeline",
+            "shaders/large_unit_update.wgsl",
+            world,
+            &update_layout,
+            shader_defs.clone(),
+            vec![opaque_target(LARGE_UNITS_DATA_FORMAT)],
+        );
+
         let draw_pipeline_id = basic_opaque_pipeline(
             "unit_draw_pipeline",
             "shaders/unit_material.wgsl",
@@ -343,6 +458,18 @@ impl FromWorld for UnitPipeline {
             "shaders/unit_projectile_material.wgsl",
             world,
             &draw_layout,
+            shader_defs.clone(),
+            vec![
+                opaque_target(DEFERRED_PREPASS_FORMAT),
+                opaque_target(DEFERRED_LIGHTING_PASS_ID_FORMAT),
+            ],
+        );
+
+        let large_draw_pipeline_id = basic_opaque_pipeline(
+            "large_unit_draw_pipeline",
+            "shaders/large_unit_material.wgsl",
+            world,
+            &draw_layout,
             shader_defs,
             vec![
                 opaque_target(DEFERRED_PREPASS_FORMAT),
@@ -356,9 +483,12 @@ impl FromWorld for UnitPipeline {
             draw_pipeline_id,
             update_layout,
             update_pipeline_id,
+            large_update_layout,
+            large_update_pipeline_id,
             evaluate_layout,
             evaluate_pipeline_id,
             draw_projectiles_pipeline_id,
+            large_draw_pipeline_id,
         }
     }
 }
@@ -369,6 +499,8 @@ pub struct UnitsDataTextures {
     pub b: CachedTexture,
     pub attack_a: CachedTexture,
     pub attack_b: CachedTexture,
+    pub large_unit_a: CachedTexture,
+    pub large_unit_b: CachedTexture,
 }
 
 fn prepare_textures(
@@ -404,9 +536,21 @@ fn prepare_textures(
         texture_descriptor.format = UNITS_ATTACK_FORMAT;
         texture_descriptor.label = Some("unit_attack_map_a");
         let unit_attack_texture_a = texture_cache.get(&render_device, texture_descriptor.clone());
-        texture_descriptor.format = UNITS_ATTACK_FORMAT;
         texture_descriptor.label = Some("unit_attack_map_b");
         let unit_attack_texture_b = texture_cache.get(&render_device, texture_descriptor.clone());
+
+        texture_descriptor.format = LARGE_UNITS_DATA_FORMAT;
+        texture_descriptor.size = Extent3d {
+            depth_or_array_layers: 1,
+            width: LARGE_UNITS_DATA_WIDTH,
+            height: LARGE_UNITS_DATA_HEIGHT,
+        };
+        texture_descriptor.label = Some("large_unit_data_a");
+        let large_unit_data_texture_a =
+            texture_cache.get(&render_device, texture_descriptor.clone());
+        texture_descriptor.label = Some("large_unit_data_b");
+        let large_unit_data_texture_b =
+            texture_cache.get(&render_device, texture_descriptor.clone());
 
         let textures = if frame_count.0 % 2 == 0 {
             UnitsDataTextures {
@@ -414,14 +558,18 @@ fn prepare_textures(
                 b: unit_data_texture_b,
                 attack_a: unit_attack_texture_a,
                 attack_b: unit_attack_texture_b,
+                large_unit_a: large_unit_data_texture_a,
+                large_unit_b: large_unit_data_texture_b,
             }
         } else {
-            // Using the same for both unit data since a flip flop happens in the node
             UnitsDataTextures {
+                // Using the same for both unit data a/b since a flip flop happens in the node
                 a: unit_data_texture_a,
                 b: unit_data_texture_b,
                 attack_a: unit_attack_texture_b,
                 attack_b: unit_attack_texture_a,
+                large_unit_a: large_unit_data_texture_b,
+                large_unit_b: large_unit_data_texture_a,
             }
         };
         commands.entity(entity).insert(textures);

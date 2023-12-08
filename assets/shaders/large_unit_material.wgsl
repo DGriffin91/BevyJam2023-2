@@ -26,6 +26,7 @@
 // Discussion: https://discord.com/channels/691052431525675048/743663924229963868/1182466862190186627
 @group(0) @binding(104) var unit_texture: texture_2d_array<f32>;
 @group(0) @binding(105) var nearest_sampler: sampler;
+@group(0) @binding(106) var large_unit_tex: texture_2d<u32>;
 
 struct VertexOutput {
     // this is `clip position` when the struct is used as a vertex stage output 
@@ -41,6 +42,7 @@ struct VertexOutput {
     @location(4) color: vec4<f32>,
 #endif
     @location(5) unit_data: vec4<u32>,
+    @location(6) udata_xy: vec2<u32>,
 }
 
 struct Vertex {
@@ -52,18 +54,20 @@ struct Vertex {
 fn vertex(vertex: Vertex) -> VertexOutput {
     var out: VertexOutput;
 
-    let dims = textureDimensions(data_texture).xy;
+    let dims = textureDimensions(large_unit_tex).xy;
 
     let unit_index = (vertex.index / 6u);
     let vert_index = vertex.index % 6u;
     
     let data_x = i32(unit_index % dims.x);
     let data_y = i32(unit_index / dims.x);
+    let idata_xy = vec2(data_x, data_y);
+    let udata_xy = vec2<u32>(idata_xy);
 
-    let unit_data = textureLoad(data_texture, vec2<i32>(data_x, data_y), 0);
-    let unit = com::unpack_unit(unit_data);
-
-    var size = 0.4;
+    let unit_data = textureLoad(large_unit_tex, idata_xy, 0);
+    let unit = com::unpack_large_unit(unit_data, udata_xy);
+ 
+    var size = com::LARGE_UNIT_SIZE;
 
     if unit.health == 0u {
         out.position = vec4(0.0);
@@ -76,12 +80,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     ));
 
 
-    var center = vec3(f32(data_x), 0.5, f32(data_y));
-
-    if unit.mode == com::UNIT_MODE_MOVEING {
-        let prev = vec3(f32(data_x - unit.step_dir.x), 0.5, f32(data_y - unit.step_dir.y));
-        center = mix(prev, center, saturate(unit.progress));
-    }
+    var center = vec3(f32(unit.pos.x), 1.0, f32(unit.pos.y));
 
     //let center = vec3(2.0, 2.0, 0.0);
 
@@ -118,6 +117,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
     out.position = vec4(position.xy, position.zw);
     out.unit_data = unit_data;
+    out.udata_xy = udata_xy;
 
 
     return out;
@@ -138,7 +138,7 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     let frag_coord = vec4(vt::ndc_to_uv(vt::position_world_to_ndc(in.world_position.xyz).xy) * view.viewport.zw, ndc.z, 0.0);
 
 
-    let unit = com::unpack_unit(in.unit_data);
+    let unit = com::unpack_large_unit(in.unit_data, in.udata_xy);
 
     var pbr = pbr_input_new();
     pbr.N = normalize(vec3(pow(in.uv, vec2(8.0)), 0.0));
@@ -149,20 +149,22 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     color = select(color, vec3(0.0, 0.0, 0.0), unit.team == 0u);
     //pbr.material.base_color = vec4(color, 1.0);
 
+    let step_dir = com::sign2i(vec2<i32>(unit.dest - unit.pos));
+
     let uv = vec2(in.uv.x, 1.0 - in.uv.y);
     let mip = 0u; //TODO select mip, TODO only mip 0 works in WebGL2
     var index = 7;
     // TODO optimize 
-    if unit.progress > 0.0 {
-        index = select(index, 0, all(unit.step_dir == vec2( 1,  0)));
-        index = select(index, 1, all(unit.step_dir == vec2( 1, -1)));
-        index = select(index, 2, all(unit.step_dir == vec2( 0, -1)));
-        index = select(index, 3, all(unit.step_dir == vec2(-1, -1)));
-        index = select(index, 4, all(unit.step_dir == vec2(-1,  0)));
-        index = select(index, 5, all(unit.step_dir == vec2(-1,  1)));
-        index = select(index, 6, all(unit.step_dir == vec2( 0,  1)));
-        index = select(index, 7, all(unit.step_dir == vec2( 1,  1)));
-    }
+    //if unit.progress > 0.0 {
+        index = select(index, 0, all(step_dir == vec2( 1,  0)));
+        index = select(index, 1, all(step_dir == vec2( 1, -1)));
+        index = select(index, 2, all(step_dir == vec2( 0, -1)));
+        index = select(index, 3, all(step_dir == vec2(-1, -1)));
+        index = select(index, 4, all(step_dir == vec2(-1,  0)));
+        index = select(index, 5, all(step_dir == vec2(-1,  1)));
+        index = select(index, 6, all(step_dir == vec2( 0,  1)));
+        index = select(index, 7, all(step_dir == vec2( 1,  1)));
+    //}
 
     //let dims = vec2<f32>(textureDimensions(unit_texture).xy) / f32(1u << mip);
     //let data = bitcast<vec2<u32>>(textureLoad(unit_texture, vec2<i32>(uv * dims), u32(index), i32(mip)).xy);
@@ -176,7 +178,7 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     out.deferred = deferred_gbuffer_from_pbr_input(pbr);
     out.deferred_lighting_pass_id = 1u;
 
-    if pbr.material.base_color.w < 0.5 {
+    if pbr.material.base_color.w < 0.5 || unit.health == 0u {
         discard;
     }
 
@@ -185,3 +187,4 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     // out.motion_vector = calculate_motion_vector(in.world_position, in.previous_world_position);
     return out;
 }
+

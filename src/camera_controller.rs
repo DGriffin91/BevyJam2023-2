@@ -16,8 +16,10 @@ pub struct OrthoCameraController {
     pub key_up: KeyCode,
     pub key_down: KeyCode,
     pub key_run: KeyCode,
+    pub click_zoom_modifier: KeyCode,
     pub mouse_key_enable_mouse: MouseButton,
     pub keyboard_key_enable_mouse: KeyCode,
+    pub click_zoom_speed: f32,
     pub walk_speed: f32,
     pub run_speed: f32,
     pub friction: f32,
@@ -44,8 +46,10 @@ impl Default for OrthoCameraController {
             key_up: KeyCode::E,
             key_down: KeyCode::Q,
             key_run: KeyCode::ShiftLeft,
+            click_zoom_modifier: KeyCode::ControlLeft,
             mouse_key_enable_mouse: MouseButton::Left,
             keyboard_key_enable_mouse: KeyCode::M,
+            click_zoom_speed: 1.0,
             walk_speed: 1000.0,
             run_speed: 2000.0,
             friction: 0.5,
@@ -53,7 +57,7 @@ impl Default for OrthoCameraController {
             yaw: 0.0,
             velocity: Vec3::ZERO,
             orbit_focus: Vec3::ZERO,
-            scroll_wheel_speed: 0.1,
+            scroll_wheel_speed: 0.12,
             lock_y: false,
             max_zoom: 0.5,
             min_zoom: 0.001,
@@ -139,10 +143,22 @@ fn camera_controller(
             options.velocity = Vec3::ZERO;
         }
     }
-    let right = transform.right();
-    let up = transform.up();
-    let translation_delta = options.velocity.x * dt * right + options.velocity.y * dt * up;
-    transform.translation += translation_delta * o_scale;
+    if !key_input.pressed(options.click_zoom_modifier) {
+        let right = transform.right();
+        let up = transform.up();
+        let translation_delta = options.velocity.x * dt * right + options.velocity.y * dt * up;
+        transform.translation += translation_delta * o_scale;
+    }
+
+    // Handle mouse input
+    let mut mouse_delta = Vec2::ZERO;
+    if mouse_button_input.pressed(options.mouse_key_enable_mouse) || *move_toggled {
+        for mouse_event in mouse_events.read() {
+            mouse_delta += mouse_event.delta;
+        }
+    } else {
+        mouse_events.clear();
+    }
 
     match projection.as_mut() {
         Projection::Orthographic(o) => {
@@ -161,20 +177,17 @@ fn camera_controller(
             if scroll_distance < 0.0 {
                 o.scale *= (1.0 + options.scroll_wheel_speed) * scroll_distance.abs();
             }
+            if key_input.pressed(options.click_zoom_modifier)
+                && mouse_button_input.pressed(options.mouse_key_enable_mouse)
+            {
+                o.scale *=
+                    1.0 + (-mouse_delta.x + mouse_delta.y) * 0.002 * options.click_zoom_speed;
+                mouse_delta = Vec2::ZERO;
+            }
             o.scale += (options.velocity.z * 0.0000005) * o.scale.sqrt();
             o.scale = o.scale.clamp(options.min_zoom, options.max_zoom);
         }
         Projection::Perspective(_) => (),
-    }
-
-    // Handle mouse input
-    let mut mouse_delta = Vec2::ZERO;
-    if mouse_button_input.pressed(options.mouse_key_enable_mouse) || *move_toggled {
-        for mouse_event in mouse_events.read() {
-            mouse_delta += mouse_event.delta;
-        }
-    } else {
-        mouse_events.clear();
     }
 
     if mouse_delta != Vec2::ZERO {

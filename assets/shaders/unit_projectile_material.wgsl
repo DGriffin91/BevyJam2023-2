@@ -56,7 +56,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let unit_data = textureLoad(data_texture, iunit_coord, 0);
     let unit = com::unpack_unit(unit_data);
 
-    var size = 0.2;
+    var size = 0.1;
     var projectile_y = 0.7;
 
 

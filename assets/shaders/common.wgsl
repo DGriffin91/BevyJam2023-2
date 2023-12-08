@@ -138,12 +138,13 @@ const UNIT_MODE_MOVE: u32 = 1u;
 const UNIT_MODE_MOVEING: u32 = 2u;
 const UNIT_MODE_ATTACK: u32 = 3u;
 
-const SPEED_MOVE: f32 = 10.0;
-const SPEED_ATTACK: f32 = 1.0;
+const SPEED_MOVE: f32 = 1.0;
+const SPEED_ATTACK: f32 = 5.0;
+const SMALL_UNIT_SIZE: f32 = 1.0;
 
-const LARGE_SPEED_MOVE: f32 = 10.0;
+const LARGE_SPEED_MOVE: f32 = 1.0;
 const LARGE_SPEED_ATTACK: f32 = 1.0;
-const LARGE_UNIT_SIZE: f32 = 1.0;
+const LARGE_UNIT_SIZE: f32 = 4.0;
 
 
 fn unpack_unit(data: vec4<u32>) -> Unit {

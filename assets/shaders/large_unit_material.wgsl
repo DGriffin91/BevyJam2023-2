@@ -54,7 +54,8 @@ struct Vertex {
 fn vertex(vertex: Vertex) -> VertexOutput {
     var out: VertexOutput;
 
-    let dims = textureDimensions(large_unit_tex).xy;
+    var dims = textureDimensions(large_unit_tex).xy;
+    dims.x -= 1u;
 
     let unit_index = (vertex.index / 6u);
     let vert_index = vertex.index % 6u;
@@ -80,7 +81,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     ));
 
 
-    var center = vec3(f32(unit.pos.x), 1.0, f32(unit.pos.y));
+    var center = vec3(f32(unit.pos.x), 1.9, f32(unit.pos.y));
 
     //let center = vec3(2.0, 2.0, 0.0);
 
@@ -152,15 +153,17 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
 
     let uv = vec2(in.uv.x, 1.0 - in.uv.y);
     let mip = 0u; //TODO select mip, TODO only mip 0 works in WebGL2
-    var index = 7;
+    var index = unit.dir_index;
+    
+    let fframe = f32(globals.frame_count) * globals.time;
 
+    if unit.mode == com::UNIT_MODE_MOVEING {
+        let rng = sampling::hash_noise(in.udata_xy, 136521u);
+        index += (u32(globals.time * com::LARGE_SPEED_MOVE * 3.5 + rng * 3.0) % 3u) * 8u;
+    }
 
-    //let dims = vec2<f32>(textureDimensions(unit_texture).xy) / f32(1u << mip);
-    //let data = bitcast<vec2<u32>>(textureLoad(unit_texture, vec2<i32>(uv * dims), u32(index), i32(mip)).xy);
     // Cursed, but work on both webgl2 and native
-    // Discussion: https://discord.com/channels/691052431525675048/743663924229963868/1182466862190186627
-    //let data = bitcast<vec2<u32>>(textureSampleLevel(unit_texture, nearest_sampler, uv, u32(index), f32(mip)));
-    let data = bitcast<vec2<u32>>(textureSample(unit_texture, nearest_sampler, uv, unit.dir_index));
+    let data = bitcast<vec2<u32>>(textureSample(unit_texture, nearest_sampler, uv, index));
     pbr = com::decompress_gbuffer(frag_coord, data.xy);
     
 

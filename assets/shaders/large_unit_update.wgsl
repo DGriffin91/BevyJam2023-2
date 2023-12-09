@@ -22,6 +22,11 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
     let ufrag_coord = vec2<u32>(frag_coord);
     let ifrag_coord = vec2<i32>(ufrag_coord);
 
+    if ufrag_coord.x == 65u {
+        // Process players
+        return vec4(0u);
+    }
+
     let system_index = ufrag_coord.y;
 
     var out = vec4(0u);
@@ -32,7 +37,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
 
     // --- Random spawn ---
     let rng = sampling::hash_noise(ufrag_coord + globals.frame_count, globals.frame_count + 34121u);
-    if unit.health == 0u && distance(rng, 0.5) < 0.005 * globals.delta_time {
+    if unit.health == 0u && distance(rng, 0.5) < 0.001 * globals.delta_time {
         unit = com::unpack_large_unit(vec4(0u), ufrag_coord);
         unit.health = 255u;
         var spawn = vec2(
@@ -66,7 +71,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
 
     // See if there's any other large units in close proximity and if so move away a bit
     var other_rng = sampling::hash_noise(ufrag_coord, globals.frame_count + 45245u);
-    let other_unit_frag_coord = vec2(i32(other_rng * #{LARGE_UNITS_DATA_WIDTH}.0), ifrag_coord.y);
+    let other_unit_frag_coord = vec2(i32(other_rng * (#{LARGE_UNITS_DATA_WIDTH}.0 - 1.0)), ifrag_coord.y);
     let other_data = textureLoad(large_unit_tex, other_unit_frag_coord, 0);
     var other_unit = com::unpack_large_unit(other_data, vec2<u32>(other_unit_frag_coord));
     if unit.mode == com::UNIT_MODE_IDLE {

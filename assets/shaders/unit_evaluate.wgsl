@@ -13,6 +13,7 @@
 @group(0) @binding(101) var data_texture: texture_2d<u32>;
 @group(0) @binding(102) var<uniform> command: com::UnitCommand;
 @group(0) @binding(103) var prev_attack: texture_2d<u32>;
+@group(0) @binding(106) var large_unit_tex: texture_2d<u32>;
 
 struct FragmentOutput {
     @location(0) unit_data: vec4<u32>,
@@ -68,20 +69,44 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
         }
     }        
     
-    // --- Random spawn ---
+    // -----------------------
+    //// --- Random spawn ---
+    //let rng = sampling::hash_noise(ufrag_coord + globals.frame_count, globals.frame_count + 34121u);
+    //if in.uv.y < 0.2 || in.uv.y > 0.8 {
+    //    if unit.health == 0u && distance(rng, 0.5) < 0.0005 * globals.delta_time {
+    //        unit = com::unpack_unit(vec4(0u));
+    //        unit.health = 255u;
+    //        unit.id = u32(sampling::hash_noise(ufrag_coord, globals.frame_count + 96421u) * f32(sampling::U32_MAX)) + 1u;
+    //        unit.dest = ufrag_coord;
+    //        unit.team = select(1u, 2u, in.uv.y > 0.5);
+    //        out.unit_data = com::pack_unit(unit);
+    //        out.attack_data = vec4(0u);
+    //        return out;
+    //    }
+    //}
+    // --- Spawn around large ---
+
+
+    var large_rng = sampling::hash_noise(ufrag_coord, globals.frame_count + 45245u);
+    var team_rng = i32(round(sampling::hash_noise(ufrag_coord, globals.frame_count + 647132u)));
+    let large_unit_frag_coord = vec2(i32(large_rng * (#{LARGE_UNITS_DATA_WIDTH}.0 - 1.0)), team_rng);
+    let large_data = textureLoad(large_unit_tex, large_unit_frag_coord, 0);
+    var large_unit = com::unpack_large_unit(large_data, vec2<u32>(large_unit_frag_coord));
+
     let rng = sampling::hash_noise(ufrag_coord + globals.frame_count, globals.frame_count + 34121u);
-    if in.uv.y < 0.2 || in.uv.y > 0.8 {
-        if unit.health == 0u && distance(rng, 0.5) < 0.0005 * globals.delta_time {
+    if large_unit.health > 0u && distance(large_unit.pos.xy, frag_coord.xy) < com::SPAWN_RADIUS {
+        if unit.health == 0u && distance(rng, 0.5) < com::SPAWN_RATE * globals.delta_time { 
             unit = com::unpack_unit(vec4(0u));
             unit.health = 255u;
             unit.id = u32(sampling::hash_noise(ufrag_coord, globals.frame_count + 96421u) * f32(sampling::U32_MAX)) + 1u;
             unit.dest = ufrag_coord;
-            unit.team = select(1u, 2u, in.uv.y > 0.5);
+            unit.team = u32(team_rng) + 1u;
             out.unit_data = com::pack_unit(unit);
             out.attack_data = vec4(0u);
             return out;
         }
     }
+    // -----------------------
 
     // If there is no unit here, return none
     if unit.health == 0u || unit.id == 0u {

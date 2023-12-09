@@ -136,7 +136,8 @@ impl ViewNode for UnitsNode {
             .unwrap();
 
         let images = world.resource::<RenderAssets<Image>>();
-        let unit_texture = image!(images, &resource!(world, UnitTexture).0);
+        let unit_texture = image!(images, &resource!(world, UnitTexture).small_goose);
+        let big_goose = image!(images, &resource!(world, UnitTexture).big_goose);
 
         // ---------------------------------------
         // Units Evaluate
@@ -334,7 +335,7 @@ impl ViewNode for UnitsNode {
                     (101, &unit_data_texture.a.default_view),
                     (102, commands_uniform.as_entire_binding()),
                     (103, &unit_data_texture.attack_a.default_view),
-                    (104, &unit_texture.texture_view),
+                    (104, &big_goose.texture_view),
                     (105, &unit_pipeline.sampler),
                     (106, &unit_data_texture.large_unit_b.default_view),
                 )),
@@ -353,7 +354,7 @@ impl ViewNode for UnitsNode {
             render_pass.set_render_pipeline(pipeline);
             render_pass.set_bind_group(0, &bind_group, &[view_uniform_offset.offset]);
             render_pass.draw(
-                0..LARGE_UNITS_DATA_WIDTH * LARGE_UNITS_DATA_HEIGHT * 6,
+                0..(LARGE_UNITS_DATA_WIDTH - 1) * LARGE_UNITS_DATA_HEIGHT * 6,
                 0..1,
             );
         }

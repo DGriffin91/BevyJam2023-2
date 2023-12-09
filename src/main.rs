@@ -275,8 +275,14 @@ fn command_units(
 }
 
 #[derive(Resource, ExtractResource, Clone)]
-pub struct UnitTexture(pub Handle<Image>);
+pub struct UnitTexture {
+    pub small_goose: Handle<Image>,
+    pub big_goose: Handle<Image>,
+}
 
 pub fn load_unit_texture(mut commands: Commands, ass: Res<AssetServer>) {
-    commands.insert_resource(UnitTexture(ass.load("models/SmallGoose.ktx2")));
+    commands.insert_resource(UnitTexture {
+        small_goose: ass.load("models/SmallGoose.ktx2"),
+        big_goose: ass.load("models/GooseHydra.ktx2"),
+    });
 }

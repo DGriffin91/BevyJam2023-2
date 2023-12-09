@@ -136,7 +136,7 @@ impl ViewNode for UnitsNode {
             .unwrap();
 
         let images = world.resource::<RenderAssets<Image>>();
-        let unit_texture = image!(images, &resource!(world, UnitTexture).small_goose);
+        let small_goose = image!(images, &resource!(world, UnitTexture).small_goose);
         let big_goose = image!(images, &resource!(world, UnitTexture).big_goose);
 
         // ---------------------------------------
@@ -164,9 +164,10 @@ impl ViewNode for UnitsNode {
                     (101, &unit_data_texture.a.default_view),
                     (102, commands_uniform.as_entire_binding()),
                     (103, &unit_data_texture.attack_b.default_view),
-                    (104, &unit_texture.texture_view),
+                    (104, &small_goose.texture_view),
                     (105, &unit_pipeline.sampler),
                     (106, &unit_data_texture.large_unit_a.default_view),
+                    (107, &big_goose.texture_view),
                 )),
             );
 
@@ -207,9 +208,10 @@ impl ViewNode for UnitsNode {
                     (101, &unit_data_texture.b.default_view),
                     (102, commands_uniform.as_entire_binding()),
                     (103, &unit_data_texture.attack_a.default_view),
-                    (104, &unit_texture.texture_view),
+                    (104, &small_goose.texture_view),
                     (105, &unit_pipeline.sampler),
                     (106, &unit_data_texture.large_unit_a.default_view),
+                    (107, &big_goose.texture_view),
                 )),
             );
 
@@ -247,9 +249,10 @@ impl ViewNode for UnitsNode {
                     (101, &unit_data_texture.a.default_view),
                     (102, commands_uniform.as_entire_binding()),
                     (103, &unit_data_texture.attack_a.default_view),
-                    (104, &unit_texture.texture_view),
+                    (104, &small_goose.texture_view),
                     (105, &unit_pipeline.sampler),
                     (106, &unit_data_texture.large_unit_a.default_view),
+                    (107, &big_goose.texture_view),
                 )),
             );
 
@@ -284,9 +287,10 @@ impl ViewNode for UnitsNode {
                     (101, &unit_data_texture.a.default_view),
                     (102, commands_uniform.as_entire_binding()),
                     (103, &unit_data_texture.attack_a.default_view),
-                    (104, &unit_texture.texture_view),
+                    (104, &small_goose.texture_view),
                     (105, &unit_pipeline.sampler),
                     (106, &unit_data_texture.large_unit_b.default_view),
+                    (107, &big_goose.texture_view),
                 )),
             );
 
@@ -328,16 +332,17 @@ impl ViewNode for UnitsNode {
 
             let bind_group = render_context.render_device().create_bind_group(
                 "large_unit_draw_bind_group",
-                &unit_pipeline.draw_layout,
+                &unit_pipeline.large_unit_draw_layout,
                 &BindGroupEntries::with_indices((
                     (0, view_binding(world)),
                     (9, globals_binding(world)),
                     (101, &unit_data_texture.a.default_view),
                     (102, commands_uniform.as_entire_binding()),
                     (103, &unit_data_texture.attack_a.default_view),
-                    (104, &big_goose.texture_view),
+                    (104, &small_goose.texture_view),
                     (105, &unit_pipeline.sampler),
                     (106, &unit_data_texture.large_unit_b.default_view),
+                    (107, &big_goose.texture_view),
                 )),
             );
 
@@ -375,6 +380,7 @@ struct UnitPipeline {
     evaluate_layout: BindGroupLayout,
     draw_projectiles_pipeline_id: CachedRenderPipelineId,
     large_draw_pipeline_id: CachedRenderPipelineId,
+    large_unit_draw_layout: BindGroupLayout,
 }
 
 impl FromWorld for UnitPipeline {
@@ -402,6 +408,7 @@ impl FromWorld for UnitPipeline {
                 ftexture_layout_entry(104, TextureViewDimension::D2Array), // Unit Material Texture
                 fsampler_layout_entry(105),
                 utexture_layout_entry(106, TextureViewDimension::D2), // Prev Large Unit Data
+                ftexture_layout_entry(107, TextureViewDimension::D2Array), // Unit Material Texture
             ],
         };
 
@@ -409,6 +416,7 @@ impl FromWorld for UnitPipeline {
         let update_layout = render_device.create_bind_group_layout(layout_descriptor);
         let large_update_layout = render_device.create_bind_group_layout(layout_descriptor);
         let draw_layout = render_device.create_bind_group_layout(layout_descriptor);
+        let large_unit_draw_layout = render_device.create_bind_group_layout(layout_descriptor);
 
         let sampler = nearest_sampler(render_device);
 
@@ -490,6 +498,7 @@ impl FromWorld for UnitPipeline {
             evaluate_pipeline_id,
             draw_projectiles_pipeline_id,
             large_draw_pipeline_id,
+            large_unit_draw_layout,
         }
     }
 }

@@ -119,8 +119,103 @@ impl ViewNode for MinimapNode {
             );
 
             let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
-                label: Some("unit_pass"),
-                color_attachments: &[load_color_attachment(&minimap_textures.a.default_view)],
+                label: Some("generate_minimap_pass"),
+                color_attachments: &[load_color_attachment(
+                    &minimap_textures.minimap_tex.default_view,
+                )],
+                depth_stencil_attachment: None,
+            });
+
+            render_pass.set_render_pipeline(pipeline);
+            render_pass.set_bind_group(0, &bind_group, &[view_uniform_offset.offset]);
+
+            render_pass.draw(0..3, 0..1);
+        }
+
+        // ---------------------------------------
+        // Downscale Minimap Texture
+        // ---------------------------------------
+
+        let Some(pipeline) =
+            pipeline_cache.get_render_pipeline(unit_pipeline.minimap_downscale_pipeline_id)
+        else {
+            return Ok(());
+        };
+        {
+            let bind_group = render_context.render_device().create_bind_group(
+                "minimap_bind_group",
+                &unit_pipeline.update_layout,
+                &BindGroupEntries::with_indices((
+                    (0, view_binding(world)),
+                    (9, globals_binding(world)),
+                    (101, &minimap_textures.minimap_tex.default_view),
+                    (103, &unit_data_texture.attack_a.default_view), // Placeholder to avoid changing layout
+                )),
+            );
+
+            let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
+                label: Some("downscale_minimap_pass"),
+                color_attachments: &[load_color_attachment(
+                    &minimap_textures.minimap_sm_tex.default_view,
+                )],
+                depth_stencil_attachment: None,
+            });
+
+            render_pass.set_render_pipeline(pipeline);
+            render_pass.set_bind_group(0, &bind_group, &[view_uniform_offset.offset]);
+
+            render_pass.draw(0..3, 0..1);
+        }
+
+        // ---------------------------------------
+        // Downscale 2 Minimap Texture
+        // ---------------------------------------
+        {
+            let bind_group = render_context.render_device().create_bind_group(
+                "minimap_bind_group",
+                &unit_pipeline.update_layout,
+                &BindGroupEntries::with_indices((
+                    (0, view_binding(world)),
+                    (9, globals_binding(world)),
+                    (101, &minimap_textures.minimap_sm_tex.default_view),
+                    (103, &unit_data_texture.attack_a.default_view), // Placeholder to avoid changing layout
+                )),
+            );
+
+            let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
+                label: Some("downscale_minimap_pass"),
+                color_attachments: &[load_color_attachment(
+                    &minimap_textures.minimap_sm2_tex.default_view,
+                )],
+                depth_stencil_attachment: None,
+            });
+
+            render_pass.set_render_pipeline(pipeline);
+            render_pass.set_bind_group(0, &bind_group, &[view_uniform_offset.offset]);
+
+            render_pass.draw(0..3, 0..1);
+        }
+
+        // ---------------------------------------
+        // Downscale 3 Minimap Texture
+        // ---------------------------------------
+        {
+            let bind_group = render_context.render_device().create_bind_group(
+                "minimap_bind_group",
+                &unit_pipeline.update_layout,
+                &BindGroupEntries::with_indices((
+                    (0, view_binding(world)),
+                    (9, globals_binding(world)),
+                    (101, &minimap_textures.minimap_sm2_tex.default_view),
+                    (103, &unit_data_texture.attack_a.default_view), // Placeholder to avoid changing layout
+                )),
+            );
+
+            let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
+                label: Some("downscale_minimap_pass"),
+                color_attachments: &[load_color_attachment(
+                    &minimap_textures.minimap_sm3_tex.default_view,
+                )],
                 depth_stencil_attachment: None,
             });
 
@@ -138,6 +233,7 @@ impl ViewNode for MinimapNode {
 struct MinimapPipeline {
     update_layout: BindGroupLayout,
     update_pipeline_id: CachedRenderPipelineId,
+    minimap_downscale_pipeline_id: CachedRenderPipelineId,
 }
 
 impl FromWorld for MinimapPipeline {
@@ -167,16 +263,29 @@ impl FromWorld for MinimapPipeline {
             vec![opaque_target(MINIMAP_DATA_FORMAT)],
         );
 
+        let minimap_downscale_pipeline_id = basic_fullscreen_tri_pipeline(
+            "minimap_downsample_pipeline",
+            "shaders/minimap_downsample.wgsl",
+            world,
+            &update_layout,
+            shader_defs.clone(),
+            vec![opaque_target(MINIMAP_DATA_FORMAT)],
+        );
+
         Self {
             update_layout,
             update_pipeline_id,
+            minimap_downscale_pipeline_id,
         }
     }
 }
 
 #[derive(Component)]
 pub struct MinimapTextures {
-    pub a: CachedTexture,
+    pub minimap_tex: CachedTexture,
+    pub minimap_sm_tex: CachedTexture,
+    pub minimap_sm2_tex: CachedTexture,
+    pub minimap_sm3_tex: CachedTexture,
 }
 
 fn prepare_textures(
@@ -206,8 +315,37 @@ fn prepare_textures(
         texture_descriptor.label = Some("minimap_data_texture");
         let minimap_data_texture = texture_cache.get(&render_device, texture_descriptor.clone());
 
+        texture_descriptor.label = Some("minimap_sm_data_texture");
+        texture_descriptor.size = Extent3d {
+            depth_or_array_layers: 1,
+            width: texture_descriptor.size.width / MINIMAP_SCALE,
+            height: texture_descriptor.size.width / MINIMAP_SCALE,
+        };
+        let minimap_sm_data_texture = texture_cache.get(&render_device, texture_descriptor.clone());
+
+        texture_descriptor.label = Some("minimap_sm2_data_texture");
+        texture_descriptor.size = Extent3d {
+            depth_or_array_layers: 1,
+            width: texture_descriptor.size.width / MINIMAP_SCALE,
+            height: texture_descriptor.size.width / MINIMAP_SCALE,
+        };
+        let minimap_sm2_data_texture =
+            texture_cache.get(&render_device, texture_descriptor.clone());
+
+        texture_descriptor.label = Some("minimap_sm3_data_texture");
+        texture_descriptor.size = Extent3d {
+            depth_or_array_layers: 1,
+            width: texture_descriptor.size.width / MINIMAP_SCALE,
+            height: texture_descriptor.size.width / MINIMAP_SCALE,
+        };
+        let minimap_sm3_data_texture =
+            texture_cache.get(&render_device, texture_descriptor.clone());
+
         commands.entity(entity).insert(MinimapTextures {
-            a: minimap_data_texture,
+            minimap_tex: minimap_data_texture,
+            minimap_sm_tex: minimap_sm_data_texture,
+            minimap_sm2_tex: minimap_sm2_data_texture,
+            minimap_sm3_tex: minimap_sm3_data_texture,
         });
     }
 }

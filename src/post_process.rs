@@ -99,7 +99,8 @@ impl ViewNode for PostProcessNode {
                 (9, globals_binding(world)),
                 (101, post_process.source),
                 (102, &post_process_pipeline.sampler),
-                (103, &minimap_textures.a.default_view),
+                (103, &minimap_textures.minimap_tex.default_view),
+                (104, &minimap_textures.minimap_sm3_tex.default_view),
             )),
         );
 
@@ -138,6 +139,7 @@ impl FromWorld for PostProcessPipeline {
                 ftexture_layout_entry(101, TextureViewDimension::D2),
                 fsampler_layout_entry(102),
                 utexture_layout_entry(103, TextureViewDimension::D2), // Minimap
+                utexture_layout_entry(104, TextureViewDimension::D2), // Minimap sm
             ],
         });
 

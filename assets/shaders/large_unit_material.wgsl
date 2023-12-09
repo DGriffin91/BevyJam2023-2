@@ -27,6 +27,8 @@
 @group(0) @binding(104) var unit_texture: texture_2d_array<f32>;
 @group(0) @binding(105) var nearest_sampler: sampler;
 @group(0) @binding(106) var large_unit_tex: texture_2d<u32>;
+// Couldn't reuse unit_texture in WebGL2 for some reason. It would show small goose.
+@group(0) @binding(107) var big_goose_texture: texture_2d_array<f32>;
 
 struct VertexOutput {
     // this is `clip position` when the struct is used as a vertex stage output 
@@ -163,7 +165,7 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     }
 
     // Cursed, but work on both webgl2 and native
-    let data = bitcast<vec2<u32>>(textureSample(unit_texture, nearest_sampler, uv, index));
+    let data = bitcast<vec2<u32>>(textureSample(big_goose_texture, nearest_sampler, uv, index));
     pbr = com::decompress_gbuffer(frag_coord, data.xy);
     
 

@@ -1,8 +1,9 @@
 use bevy::{
-    core_pipeline::core_3d,
+    core_pipeline::{core_2d, core_3d},
     ecs::query::QueryItem,
     prelude::*,
     render::{
+        extract_component::{ExtractComponent, ExtractComponentPlugin},
         render_graph::{
             NodeRunError, RenderGraphApp, RenderGraphContext, ViewNode, ViewNodeRunner,
         },
@@ -32,21 +33,22 @@ pub struct PostProcessPlugin;
 
 impl Plugin for PostProcessPlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(ExtractComponentPlugin::<PostProcessPass>::default());
         let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;
         };
 
         render_app
             .add_render_graph_node::<ViewNodeRunner<PostProcessNode>>(
-                core_3d::graph::NAME,
+                core_2d::graph::NAME,
                 PostProcessNode::NAME,
             )
             .add_render_graph_edges(
-                core_3d::graph::NAME,
+                core_2d::graph::NAME,
                 &[
-                    core_3d::graph::node::BLOOM,
+                    core_2d::graph::node::MAIN_PASS,
                     PostProcessNode::NAME,
-                    core_3d::graph::node::TONEMAPPING,
+                    core_2d::graph::node::TONEMAPPING,
                 ],
             );
     }
@@ -66,21 +68,25 @@ impl PostProcessNode {
     pub const NAME: &'static str = "game_post_process";
 }
 
+#[derive(Component, Clone, ExtractComponent)]
+pub struct PostProcessPass;
+
 impl ViewNode for PostProcessNode {
     type ViewQuery = (
         &'static ViewTarget,
         &'static ViewUniformOffset,
-        &'static MinimapTextures,
+        &'static PostProcessPass,
     );
 
     fn run(
         &self,
         _graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
-        (view_target, view_uniform_offset, minimap_textures): QueryItem<Self::ViewQuery>,
+        (view_target, view_uniform_offset, _post_process): QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
         let post_process_pipeline = world.resource::<PostProcessPipeline>();
+        let minimap_textures = world.resource::<MinimapTextures>();
 
         let pipeline_cache = world.resource::<PipelineCache>();
 

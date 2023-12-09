@@ -5,6 +5,7 @@ pub mod camera_controller;
 pub mod minimap;
 pub mod particles;
 pub mod post_process;
+pub mod ui;
 pub mod units;
 
 use std::f32::consts::FRAC_PI_4;
@@ -20,19 +21,22 @@ use bevy::{
     math::*,
     pbr::{DefaultOpaqueRendererMethod, NotShadowCaster, PbrPlugin},
     prelude::*,
-    render::extract_resource::{ExtractResource, ExtractResourcePlugin},
+    render::{
+        extract_resource::{ExtractResource, ExtractResourcePlugin},
+        view::RenderLayers,
+    },
     window::{PresentMode, PrimaryWindow},
 };
 use bevy_basic_camera::{CameraController, CameraControllerPlugin};
-use bevy_mod_taa::{
-    disocclusion::DisocclusionSettings, fxaa::FxaaPrepass, TAABundle, TAAPlugin, TAASettings,
-};
+use bevy_mod_taa::{TAABundle, TAAPlugin, TAASettings};
+use bevy_picoui::{pico::Pico2dCamera, PicoPlugin};
 use bevy_ridiculous_ssgi::{ssgi::SSGIPass, SSGIBundle, SSGIPlugin};
 use camera_controller::{OrthoCameraController, OrthoCameraControllerPlugin};
 use minimap::{MinimapPass, MinimapPlugin};
 use particles::{ParticleCommand, ParticlesPass, ParticlesPlugin};
 use post_process::PostProcessPlugin;
 use shared_exponent_formats::{rgb9e5::vec3_to_rgb9e5, xyz8e5::vec3_to_xyz8e5};
+use ui::UIPlugin;
 use units::{UnitCommand, UnitsPass, UnitsPlugin};
 
 fn main() {
@@ -59,6 +63,11 @@ fn main() {
                     ..default()
                 }),
         )
+        // Put gizmos on layer 1 so they don't show up on the 2d camera
+        .insert_resource(GizmoConfig {
+            render_layers: RenderLayers::layer(1),
+            ..default()
+        })
         .add_plugins((
             OrthoCameraControllerPlugin,
             ParticlesPlugin,
@@ -70,6 +79,8 @@ fn main() {
             LogDiagnosticsPlugin::default(),
             FrameTimeDiagnosticsPlugin::default(),
             ExtractResourcePlugin::<UnitTexture>::default(),
+            PicoPlugin::default(),
+            UIPlugin,
         ))
         .add_systems(Startup, (setup, load_unit_texture))
         .add_systems(Update, (restart_particle_system, command_units))
@@ -169,18 +180,20 @@ fn setup(
             DeferredPrepass,
             DepthPrepass,
             MotionVectorPrepass,
+            Pico2dCamera,
+            RenderLayers::all(),
         ))
         .insert(OrthoCameraController {
             mouse_key_enable_mouse: MouseButton::Middle,
             ..default()
         })
         .insert((
-            FxaaPrepass::default(),
+            //FxaaPrepass::default(),
             TAASettings::default(),
             //TemporalJitter,
             MotionVectorPrepass,
             //NormalPrepass,
-            DisocclusionSettings::default(),
+            //DisocclusionSettings::default(),
         ))
         .insert(SSGIBundle {
             ssgi_pass: SSGIPass {
@@ -249,7 +262,7 @@ fn ray_plane_intersection(ray: Ray, plane_point: Vec3, plane_normal: Vec3) -> Op
 fn command_units(
     mouse_button_input: Res<Input<MouseButton>>,
     window: Query<&Window, With<PrimaryWindow>>,
-    cameras: Query<(&Camera, &GlobalTransform)>,
+    cameras: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
     mut unit_command: ResMut<UnitCommand>,
     //mut select_start: Local<Option<Vec3>>,
     //mut select_end: Local<Option<Vec3>>,

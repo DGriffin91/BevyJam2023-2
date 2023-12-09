@@ -30,7 +30,7 @@ use crate::{
     units::{UnitsDataTextures, UnitsNode, ATTACK_RADIUS, UNITS_DATA_HEIGHT, UNITS_DATA_WIDTH},
 };
 
-pub const MINIMAP_DATA_FORMAT: TextureFormat = TextureFormat::Rgba8Uint;
+pub const MINIMAP_DATA_FORMAT: TextureFormat = TextureFormat::Rgba32Uint;
 pub const MINIMAP_SCALE: u32 = 4;
 
 pub struct MinimapPlugin;
@@ -81,20 +81,18 @@ impl ViewNode for MinimapNode {
         &'static ViewUniformOffset,
         &'static ViewTarget,
         &'static UnitsDataTextures,
-        &'static MinimapTextures,
     );
 
     fn run(
         &self,
         _graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
-        (view_uniform_offset, _view_target, unit_data_texture, minimap_textures): QueryItem<
-            Self::ViewQuery,
-        >,
+        (view_uniform_offset, _view_target, unit_data_texture): QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
         let unit_pipeline = world.resource::<MinimapPipeline>();
         let pipeline_cache = world.resource::<PipelineCache>();
+        let minimap_textures = world.resource::<MinimapTextures>();
 
         // ---------------------------------------
         // Generate Minimap Texture
@@ -280,7 +278,7 @@ impl FromWorld for MinimapPipeline {
     }
 }
 
-#[derive(Component)]
+#[derive(Resource)]
 pub struct MinimapTextures {
     pub minimap_tex: CachedTexture,
     pub minimap_sm_tex: CachedTexture,
@@ -292,60 +290,55 @@ fn prepare_textures(
     mut commands: Commands,
     mut texture_cache: ResMut<TextureCache>,
     render_device: Res<RenderDevice>,
-    views: Query<(Entity, &ExtractedCamera, &ExtractedView), With<MinimapPass>>,
 ) {
-    for (entity, _camera, _view) in &views {
-        let mut texture_descriptor = TextureDescriptor {
-            label: None,
-            size: Extent3d {
-                depth_or_array_layers: 1,
-                width: UNITS_DATA_WIDTH / MINIMAP_SCALE,
-                height: UNITS_DATA_HEIGHT / MINIMAP_SCALE,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: MINIMAP_DATA_FORMAT,
-            usage: TextureUsages::RENDER_ATTACHMENT
-                | TextureUsages::TEXTURE_BINDING
-                | TextureUsages::COPY_DST,
-            view_formats: &[],
-        };
-
-        texture_descriptor.label = Some("minimap_data_texture");
-        let minimap_data_texture = texture_cache.get(&render_device, texture_descriptor.clone());
-
-        texture_descriptor.label = Some("minimap_sm_data_texture");
-        texture_descriptor.size = Extent3d {
+    let mut texture_descriptor = TextureDescriptor {
+        label: None,
+        size: Extent3d {
             depth_or_array_layers: 1,
-            width: texture_descriptor.size.width / MINIMAP_SCALE,
-            height: texture_descriptor.size.width / MINIMAP_SCALE,
-        };
-        let minimap_sm_data_texture = texture_cache.get(&render_device, texture_descriptor.clone());
+            width: UNITS_DATA_WIDTH / MINIMAP_SCALE,
+            height: UNITS_DATA_HEIGHT / MINIMAP_SCALE,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format: MINIMAP_DATA_FORMAT,
+        usage: TextureUsages::RENDER_ATTACHMENT
+            | TextureUsages::TEXTURE_BINDING
+            | TextureUsages::COPY_DST,
+        view_formats: &[],
+    };
 
-        texture_descriptor.label = Some("minimap_sm2_data_texture");
-        texture_descriptor.size = Extent3d {
-            depth_or_array_layers: 1,
-            width: texture_descriptor.size.width / MINIMAP_SCALE,
-            height: texture_descriptor.size.width / MINIMAP_SCALE,
-        };
-        let minimap_sm2_data_texture =
-            texture_cache.get(&render_device, texture_descriptor.clone());
+    texture_descriptor.label = Some("minimap_data_texture");
+    let minimap_data_texture = texture_cache.get(&render_device, texture_descriptor.clone());
 
-        texture_descriptor.label = Some("minimap_sm3_data_texture");
-        texture_descriptor.size = Extent3d {
-            depth_or_array_layers: 1,
-            width: texture_descriptor.size.width / MINIMAP_SCALE,
-            height: texture_descriptor.size.width / MINIMAP_SCALE,
-        };
-        let minimap_sm3_data_texture =
-            texture_cache.get(&render_device, texture_descriptor.clone());
+    texture_descriptor.label = Some("minimap_sm_data_texture");
+    texture_descriptor.size = Extent3d {
+        depth_or_array_layers: 1,
+        width: texture_descriptor.size.width / MINIMAP_SCALE,
+        height: texture_descriptor.size.width / MINIMAP_SCALE,
+    };
+    let minimap_sm_data_texture = texture_cache.get(&render_device, texture_descriptor.clone());
 
-        commands.entity(entity).insert(MinimapTextures {
-            minimap_tex: minimap_data_texture,
-            minimap_sm_tex: minimap_sm_data_texture,
-            minimap_sm2_tex: minimap_sm2_data_texture,
-            minimap_sm3_tex: minimap_sm3_data_texture,
-        });
-    }
+    texture_descriptor.label = Some("minimap_sm2_data_texture");
+    texture_descriptor.size = Extent3d {
+        depth_or_array_layers: 1,
+        width: texture_descriptor.size.width / MINIMAP_SCALE,
+        height: texture_descriptor.size.width / MINIMAP_SCALE,
+    };
+    let minimap_sm2_data_texture = texture_cache.get(&render_device, texture_descriptor.clone());
+
+    texture_descriptor.label = Some("minimap_sm3_data_texture");
+    texture_descriptor.size = Extent3d {
+        depth_or_array_layers: 1,
+        width: texture_descriptor.size.width / MINIMAP_SCALE,
+        height: texture_descriptor.size.width / MINIMAP_SCALE,
+    };
+    let minimap_sm3_data_texture = texture_cache.get(&render_device, texture_descriptor.clone());
+
+    commands.insert_resource(MinimapTextures {
+        minimap_tex: minimap_data_texture,
+        minimap_sm_tex: minimap_sm_data_texture,
+        minimap_sm2_tex: minimap_sm2_data_texture,
+        minimap_sm3_tex: minimap_sm3_data_texture,
+    });
 }

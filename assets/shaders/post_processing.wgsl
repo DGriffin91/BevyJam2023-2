@@ -28,7 +28,7 @@ fn print_value(
     row: i32,
     value: u32,
 ) -> vec4<f32> {
-    let row_height = 12.0 * get_scale();
+    let row_height = 11.0 * get_scale();
     let mask = printing::print_value_custom(
         frag_coord - vec2(0.0, row_height * f32(row) * 2.0),
         vec2(row_height),
@@ -67,7 +67,9 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
     let minimap_sum = get_minimap_sum();
 
-    color = print_value(frag_coord.xy, color, 8, minimap_sum.y);
+    color = print_value(frag_coord.xy - vec2(40.0, 14.0), color, 6, minimap_sum.y);
+
+    color = print_value(frag_coord.xy - vec2(40.0, 14.0), color, 8, minimap_sum.x);
 
     return color;
 }

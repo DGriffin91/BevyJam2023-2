@@ -658,7 +658,8 @@ dependencies = [
  "bevy",
  "bevy_basic_camera",
  "bevy_mod_mesh_tools",
- "bevy_mod_taa",
+ "bevy_mod_taa 0.1.0 (git+https://github.com/DGriffin91/bevy_mod_taa?branch=fast)",
+ "bevy_picoui",
  "bevy_ridiculous_ssgi",
  "bytemuck",
  "futures-intrusive",
@@ -845,6 +846,14 @@ dependencies = [
 [[package]]
 name = "bevy_mod_taa"
 version = "0.1.0"
+source = "git+https://github.com/DGriffin91/bevy_mod_taa?branch=fast#7ee898e08d73082ca3d24899f87a65d679f0455d"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
+name = "bevy_mod_taa"
+version = "0.1.0"
 source = "git+https://github.com/DGriffin91/bevy_mod_taa#8eb52f2e09c8e34346ec379d0e774f630600a32f"
 dependencies = [
  "bevy",
@@ -874,6 +883,14 @@ dependencies = [
  "radsort",
  "smallvec",
  "thread_local",
+]
+
+[[package]]
+name = "bevy_picoui"
+version = "0.1.0"
+source = "git+https://github.com/DGriffin91/bevy_picoui#49dbb09c176f1f34aa9140e3dc7ab7acf1cffd87"
+dependencies = [
+ "bevy",
 ]
 
 [[package]]
@@ -980,7 +997,7 @@ source = "git+https://github.com/DGriffin91/bevy_ridiculous_ssgi#efe81a6f9df5ff7
 dependencies = [
  "bevy",
  "bevy-inspector-egui",
- "bevy_mod_taa",
+ "bevy_mod_taa 0.1.0 (git+https://github.com/DGriffin91/bevy_mod_taa)",
 ]
 
 [[package]]

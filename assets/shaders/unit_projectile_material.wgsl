@@ -56,7 +56,9 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let unit_data = textureLoad(data_texture, iunit_coord, 0);
     let unit = com::unpack_unit(unit_data);
 
-    var size = 0.1;
+    let pixel_radius = 1.0 / (0.5 * view.viewport.w * view.projection[1][1]);
+
+    var size = max(sqrt(pixel_radius) * 0.5, 0.03);
     var projectile_y = 0.7;
 
 
@@ -126,8 +128,9 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     pbr.N = V;
     pbr.material.flags |= STANDARD_MATERIAL_FLAGS_UNLIT_BIT;
     
-    var color = select(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), unit.team == 1u);
-    pbr.material.base_color = vec4(color * 3.0, 1.0);
+    //var color = select(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), unit.team == 1u);
+    var color = vec3(1.0, 0.3, 0.05);
+    pbr.material.base_color = vec4(color * 10.0, 1.0);
 
     out.deferred = deferred_gbuffer_from_pbr_input(pbr);
     out.deferred_lighting_pass_id = 1u;

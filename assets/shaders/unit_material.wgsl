@@ -42,6 +42,7 @@ struct VertexOutput {
 #endif
     @location(5) unit_data: vec4<u32>,
     @location(6) idata_xy: vec2<i32>,
+    @location(7) dir_index: i32,
 }
 
 struct Vertex {
@@ -122,6 +123,22 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     out.unit_data = unit_data;
     out.idata_xy = idata_xy;
 
+    var index = i32(unit.id % 7u);
+    // TODO optimize 
+    if unit.progress > 0.0 {
+        index = select(index, 0, all(unit.step_dir == vec2( 1,  0)));
+        index = select(index, 1, all(unit.step_dir == vec2( 1, -1)));
+        index = select(index, 2, all(unit.step_dir == vec2( 0, -1)));
+        index = select(index, 3, all(unit.step_dir == vec2(-1, -1)));
+        index = select(index, 4, all(unit.step_dir == vec2(-1,  0)));
+        index = select(index, 5, all(unit.step_dir == vec2(-1,  1)));
+        index = select(index, 6, all(unit.step_dir == vec2( 0,  1)));
+        index = select(index, 7, all(unit.step_dir == vec2( 1,  1)));
+        if unit.mode == com::UNIT_MODE_ATTACK {
+            index += 8;
+        }
+    }
+    out.dir_index = index;
 
     return out;
 }
@@ -144,9 +161,9 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     let unit = com::unpack_unit(in.unit_data);
 
     var pbr = pbr_input_new();
-    pbr.N = normalize(vec3(pow(in.uv, vec2(8.0)), 0.0));
-    pbr.material.base_color = vec4(vec3(0.1), 1.0);
-    pbr.material.reflectance = 0.5;
+    //pbr.N = normalize(vec3(pow(in.uv, vec2(8.0)), 0.0));
+    //pbr.material.base_color = vec4(vec3(0.1), 1.0);
+    //pbr.material.reflectance = 0.5;
     
     var color = select(vec3(0.4, 0.02, 0.02), vec3(0.02, 0.15, 0.02), unit.team == 1u);
     color = select(color, vec3(0.0, 0.0, 0.0), unit.team == 0u);
@@ -161,28 +178,13 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
 
     let uv = vec2(in.uv.x, 1.0 - in.uv.y);
     let mip = 0u; //TODO select mip, TODO only mip 0 works in WebGL2
-    var index = 7;
-    // TODO optimize 
-    if unit.progress > 0.0 {
-        index = select(index, 0, all(look_dir == vec2( 1,  0)));
-        index = select(index, 1, all(look_dir == vec2( 1, -1)));
-        index = select(index, 2, all(look_dir == vec2( 0, -1)));
-        index = select(index, 3, all(look_dir == vec2(-1, -1)));
-        index = select(index, 4, all(look_dir == vec2(-1,  0)));
-        index = select(index, 5, all(look_dir == vec2(-1,  1)));
-        index = select(index, 6, all(look_dir == vec2( 0,  1)));
-        index = select(index, 7, all(look_dir == vec2( 1,  1)));
-        if unit.mode == com::UNIT_MODE_ATTACK {
-            index += 8;
-        }
-    }
 
     //let dims = vec2<f32>(textureDimensions(unit_texture).xy) / f32(1u << mip);
     //let data = bitcast<vec2<u32>>(textureLoad(unit_texture, vec2<i32>(uv * dims), u32(index), i32(mip)).xy);
     // Cursed, but work on both webgl2 and native
     // Discussion: https://discord.com/channels/691052431525675048/743663924229963868/1182466862190186627
     //let data = bitcast<vec2<u32>>(textureSampleLevel(unit_texture, nearest_sampler, uv, u32(index), f32(mip)));
-    let data = bitcast<vec2<u32>>(textureSample(unit_texture, nearest_sampler, uv, u32(index)));
+    let data = bitcast<vec2<u32>>(textureSample(unit_texture, nearest_sampler, uv, u32(in.dir_index)));
     pbr = com::decompress_gbuffer(frag_coord, data.xy);
     
 

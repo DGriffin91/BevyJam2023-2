@@ -17,13 +17,13 @@ use bevy::{
         prepass::{DeferredPrepass, DepthPrepass, MotionVectorPrepass},
     },
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
-    input::mouse::{MouseScrollUnit, MouseWheel},
+    input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel},
     math::*,
     pbr::{DefaultOpaqueRendererMethod, NotShadowCaster, PbrPlugin},
     prelude::*,
     render::{
         extract_resource::{ExtractResource, ExtractResourcePlugin},
-        view::RenderLayers,
+        view::{ColorGrading, RenderLayers},
     },
     window::{PresentMode, PrimaryWindow},
 };
@@ -142,11 +142,17 @@ fn setup(
     // light
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
+            color: Color::rgb(0.75, 0.95, 1.0),
             shadows_enabled: false,
-            illuminance: 100000.0,
+            illuminance: 7000.0,
             ..default()
         },
-        transform: Transform::from_rotation(Quat::from_euler(EulerRot::ZYX, 0.0, 0.0, -FRAC_PI_4)),
+        transform: Transform::from_rotation(Quat::from_euler(
+            EulerRot::XYZ,
+            -2.4347053,
+            -0.9712761,
+            2.5132747,
+        )),
         ..default()
     });
 
@@ -172,6 +178,12 @@ fn setup(
                     near: 0.0,
                     ..default()
                 }),
+                color_grading: ColorGrading {
+                    gamma: 1.2,
+                    exposure: 1.0,
+                    post_saturation: 1.1,
+                    pre_saturation: 1.1,
+                },
                 ..default()
             },
             UnitsPass,
@@ -182,6 +194,10 @@ fn setup(
             MotionVectorPrepass,
             Pico2dCamera,
             RenderLayers::all(),
+            EnvironmentMapLight {
+                diffuse_map: asset_server.load("environment_maps/moonless_golf_4k_diffuse.ktx2"),
+                specular_map: asset_server.load("environment_maps/moonless_golf_4k_specular.ktx2"),
+            },
         ))
         .insert(OrthoCameraController {
             mouse_key_enable_mouse: MouseButton::Middle,
@@ -299,3 +315,29 @@ pub fn load_unit_texture(mut commands: Commands, ass: Res<AssetServer>) {
         big_goose: ass.load("models/GooseHydra.ktx2"),
     });
 }
+
+//fn move_directional_light(
+//    mut query: Query<&mut Transform, With<DirectionalLight>>,
+//    mut motion_evr: EventReader<MouseMotion>,
+//    keys: Res<Input<KeyCode>>,
+//    mut e_rot: Local<Vec3>,
+//) {
+//    if !keys.pressed(KeyCode::L) {
+//        return;
+//    }
+//    for mut trans in &mut query {
+//        let euler = trans.rotation.to_euler(EulerRot::XYZ);
+//        let euler = vec3(euler.0, euler.1, euler.2);
+//
+//        for ev in motion_evr.read() {
+//            *e_rot = vec3(
+//                (euler.x.to_degrees() + ev.delta.y * 2.0).to_radians(),
+//                (euler.y.to_degrees() + ev.delta.x * 2.0).to_radians(),
+//                euler.z,
+//            );
+//        }
+//        let store = euler.lerp(*e_rot, 0.2);
+//        dbg!(store);
+//        trans.rotation = Quat::from_euler(EulerRot::XYZ, store.x, store.y, store.z);
+//    }
+//}

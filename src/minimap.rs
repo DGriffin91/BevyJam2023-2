@@ -76,22 +76,19 @@ impl MinimapNode {
 }
 
 impl ViewNode for MinimapNode {
-    type ViewQuery = (
-        &'static ViewUniformOffset,
-        &'static ViewTarget,
-        &'static UnitsDataTextures,
-    );
+    type ViewQuery = (&'static ViewUniformOffset, &'static ViewTarget);
 
     fn run(
         &self,
         _graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
-        (view_uniform_offset, _view_target, unit_data_texture): QueryItem<Self::ViewQuery>,
+        (view_uniform_offset, _view_target): QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
         let unit_pipeline = world.resource::<MinimapPipeline>();
         let pipeline_cache = world.resource::<PipelineCache>();
         let minimap_textures = world.resource::<MinimapTextures>();
+        let unit_data_texture = world.resource::<UnitsDataTextures>();
 
         // ---------------------------------------
         // Generate Minimap Texture
@@ -110,7 +107,7 @@ impl ViewNode for MinimapNode {
                 &BindGroupEntries::with_indices((
                     (0, view_binding(world)),
                     (9, globals_binding(world)),
-                    (101, &unit_data_texture.b.default_view),
+                    (101, &unit_data_texture.a.default_view),
                     (103, &unit_data_texture.attack_a.default_view),
                 )),
             );

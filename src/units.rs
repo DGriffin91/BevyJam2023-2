@@ -24,6 +24,7 @@ use bevy::{
 };
 
 use crate::bind_group_utils::ftexture_layout_entry;
+use crate::minimap::{MinimapTextures, MINIMAP_SCALE};
 use crate::{
     bind_group_utils::{
         basic_fullscreen_tri_pipeline, basic_opaque_pipeline, fsampler_layout_entry,
@@ -40,8 +41,9 @@ pub const UNITS_DATA_WIDTH: u32 = 512;
 pub const UNITS_DATA_HEIGHT: u32 = 512;
 pub const ATTACK_RADIUS: u32 = 5;
 pub const LARGE_UNITS_DATA_FORMAT: TextureFormat = TextureFormat::Rgba32Uint;
+pub const LARGE_UNITS_TEXTURE_WIDTH: u32 = 67;
 pub const LARGE_UNITS_DATA_WIDTH: u32 = 65;
-pub const LARGE_UNITS_DATA_HEIGHT: u32 = 2;
+pub const LARGE_UNITS_TEXTURE_HEIGHT: u32 = 2;
 
 #[derive(Resource, Clone, ExtractResource, Copy, ShaderType, Debug, Default)]
 pub struct UnitCommand {
@@ -105,15 +107,13 @@ impl ViewNode for UnitsNode {
         &'static ViewTarget,
         &'static ViewDepthTexture,
         &'static ViewPrepassTextures,
-        &'static UnitsDataTextures,
     );
 
     fn run(
         &self,
         _graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
-        (
-            view_uniform_offset,_view_target, depth, view_prepass_textures, unit_data_texture): QueryItem<
+        (view_uniform_offset, _view_target, depth, view_prepass_textures): QueryItem<
             Self::ViewQuery,
         >,
         world: &World,
@@ -121,6 +121,8 @@ impl ViewNode for UnitsNode {
         let unit_pipeline = world.resource::<UnitPipeline>();
         let unit_command = world.resource::<UnitCommand>();
         let time = world.resource::<Time>();
+        let minimap_textures = world.resource::<MinimapTextures>();
+        let unit_data_texture = world.resource::<UnitsDataTextures>();
 
         let pipeline_cache = world.resource::<PipelineCache>();
 
@@ -163,6 +165,8 @@ impl ViewNode for UnitsNode {
                     (105, &unit_pipeline.sampler),
                     (106, &unit_data_texture.large_unit_a.default_view),
                     (107, &big_goose.texture_view),
+                    (108, &minimap_textures.minimap_sm_tex.default_view),
+                    (109, &minimap_textures.minimap_sm3_tex.default_view),
                 )),
             );
 
@@ -207,6 +211,8 @@ impl ViewNode for UnitsNode {
                     (105, &unit_pipeline.sampler),
                     (106, &unit_data_texture.large_unit_a.default_view),
                     (107, &big_goose.texture_view),
+                    (108, &minimap_textures.minimap_sm_tex.default_view),
+                    (109, &minimap_textures.minimap_sm3_tex.default_view),
                 )),
             );
 
@@ -248,6 +254,8 @@ impl ViewNode for UnitsNode {
                     (105, &unit_pipeline.sampler),
                     (106, &unit_data_texture.large_unit_a.default_view),
                     (107, &big_goose.texture_view),
+                    (108, &minimap_textures.minimap_sm_tex.default_view),
+                    (109, &minimap_textures.minimap_sm3_tex.default_view),
                 )),
             );
 
@@ -286,6 +294,8 @@ impl ViewNode for UnitsNode {
                     (105, &unit_pipeline.sampler),
                     (106, &unit_data_texture.large_unit_b.default_view),
                     (107, &big_goose.texture_view),
+                    (108, &minimap_textures.minimap_sm_tex.default_view),
+                    (109, &minimap_textures.minimap_sm3_tex.default_view),
                 )),
             );
 
@@ -338,6 +348,8 @@ impl ViewNode for UnitsNode {
                     (105, &unit_pipeline.sampler),
                     (106, &unit_data_texture.large_unit_b.default_view),
                     (107, &big_goose.texture_view),
+                    (108, &minimap_textures.minimap_sm_tex.default_view),
+                    (109, &minimap_textures.minimap_sm3_tex.default_view),
                 )),
             );
 
@@ -354,7 +366,7 @@ impl ViewNode for UnitsNode {
             render_pass.set_render_pipeline(pipeline);
             render_pass.set_bind_group(0, &bind_group, &[view_uniform_offset.offset]);
             render_pass.draw(
-                0..(LARGE_UNITS_DATA_WIDTH - 1) * LARGE_UNITS_DATA_HEIGHT * 6,
+                0..LARGE_UNITS_DATA_WIDTH * LARGE_UNITS_TEXTURE_HEIGHT * 6,
                 0..1,
             );
         }
@@ -382,11 +394,12 @@ impl FromWorld for UnitPipeline {
     fn from_world(world: &mut World) -> Self {
         let mut shader_defs = Vec::new();
         shader_defs.extend_from_slice(&[
+            shader_def_uint!(MINIMAP_SCALE),
             shader_def_uint!(UNITS_DATA_WIDTH),
             shader_def_uint!(UNITS_DATA_HEIGHT),
             shader_def_uint!(LARGE_UNITS_DATA_WIDTH),
-            shader_def_uint!(LARGE_UNITS_DATA_HEIGHT),
-            shader_def_uint!(UNITS_DATA_HEIGHT),
+            shader_def_uint!(LARGE_UNITS_TEXTURE_WIDTH),
+            shader_def_uint!(LARGE_UNITS_TEXTURE_HEIGHT),
             shader_def_uint!(ATTACK_RADIUS),
         ]);
 
@@ -404,6 +417,8 @@ impl FromWorld for UnitPipeline {
                 fsampler_layout_entry(105),
                 utexture_layout_entry(106, TextureViewDimension::D2), // Prev Large Unit Data
                 ftexture_layout_entry(107, TextureViewDimension::D2Array), // Unit Material Texture
+                utexture_layout_entry(108, TextureViewDimension::D2), // Minimap sm
+                utexture_layout_entry(109, TextureViewDimension::D2), // Minimap sm3
             ],
         };
 
@@ -498,7 +513,7 @@ impl FromWorld for UnitPipeline {
     }
 }
 
-#[derive(Component)]
+#[derive(Resource)]
 pub struct UnitsDataTextures {
     pub a: CachedTexture,
     pub b: CachedTexture,
@@ -515,7 +530,7 @@ fn prepare_textures(
     views: Query<(Entity, &ExtractedCamera, &ExtractedView), With<UnitsPass>>,
     frame_count: Res<FrameCount>,
 ) {
-    for (entity, _camera, _view) in &views {
+    for (_entity, _camera, _view) in &views {
         let mut texture_descriptor = TextureDescriptor {
             label: None,
             size: Extent3d {
@@ -547,8 +562,8 @@ fn prepare_textures(
         texture_descriptor.format = LARGE_UNITS_DATA_FORMAT;
         texture_descriptor.size = Extent3d {
             depth_or_array_layers: 1,
-            width: LARGE_UNITS_DATA_WIDTH,
-            height: LARGE_UNITS_DATA_HEIGHT,
+            width: LARGE_UNITS_TEXTURE_WIDTH,
+            height: LARGE_UNITS_TEXTURE_HEIGHT,
         };
         texture_descriptor.label = Some("large_unit_data_a");
         let large_unit_data_texture_a =
@@ -577,7 +592,7 @@ fn prepare_textures(
                 large_unit_b: large_unit_data_texture_a,
             }
         };
-        commands.entity(entity).insert(textures);
+        commands.insert_resource(textures);
     }
 }
 

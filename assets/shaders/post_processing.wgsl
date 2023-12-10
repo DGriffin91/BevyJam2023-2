@@ -7,6 +7,7 @@
 @group(0) @binding(102) var texture_sampler: sampler;
 @group(0) @binding(103) var minimap_texture: texture_2d<u32>;
 @group(0) @binding(104) var minimap_sm3_texture: texture_2d<u32>;
+@group(0) @binding(105) var large_unit_tex: texture_2d<u32>;
 
 fn get_minimap_sum() -> vec4<u32> {
     var sum = vec4(0u);
@@ -61,15 +62,31 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         var mapping = vec2(ucoord.x, minimap_dimensions.y - ucoord.y); //view.viewport.y / 720.0
         color = vec4(vec3(0.0), 1.0);
         let minimap = textureLoad(minimap_texture, mapping, 0);
-        color.x = f32(minimap.r); // / #{MINIMAP_SCALE}.0 // Letting push into tonemapping
-        color.y = f32(minimap.g); // / #{MINIMAP_SCALE}.0 // Letting push into tonemapping
+        let died = minimap.b + minimap.a;
+        color.r = f32(minimap.y) * 0.5;
+        color.g = f32(minimap.x) * 0.5;
+        color.b = f32(died) * 1000.0;
+    } else if ucoord.x < minimap_dimensions.x + 30u && ucoord.y < minimap_dimensions.y {
+        color = vec4(vec3(0.0), 1.0);
     }
 
     let minimap_sum = get_minimap_sum();
 
-    color = print_value(frag_coord.xy - vec2(40.0, 14.0), color, 6, minimap_sum.y);
+    
+    let stats_1 = textureLoad(large_unit_tex, vec2(#{LARGE_UNITS_DATA_WIDTH}u, 0u), 0);
+    let stats_2 = textureLoad(large_unit_tex, vec2(#{LARGE_UNITS_DATA_WIDTH}u, 1u), 0);
 
-    color = print_value(frag_coord.xy - vec2(40.0, 14.0), color, 8, minimap_sum.x);
+    let left_align = 70.0;
+
+    let t1_alive = minimap_sum.x;
+    let t2_alive = minimap_sum.y;
+    let t1_lost = stats_1.x;
+    let t2_lost = stats_1.y;
+
+    color = print_value(frag_coord.xy - vec2(left_align, 14.0), color, 6, t1_alive);
+    color = print_value(frag_coord.xy - vec2(left_align, 14.0), color, 8, t1_lost);
+    color = print_value(frag_coord.xy - vec2(left_align, 14.0), color, 10, t2_lost);
+    color = print_value(frag_coord.xy - vec2(left_align, 14.0), color, 12, t2_alive);
 
     return color;
 }

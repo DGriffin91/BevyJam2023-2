@@ -17,8 +17,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
     let frag_coord = in.position.xy;
     let ifrag_coord = vec2<i32>(frag_coord) * #{MINIMAP_SCALE};
 
-    var team_r_units = 0u;
-    var team_g_units = 0u;
+    var out = vec4(0u);
 
     for (var x = 0; x < #{MINIMAP_SCALE}; x += 1) {
         for (var y = 0; y < #{MINIMAP_SCALE}; y += 1) {
@@ -27,15 +26,22 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
             var unit = com::unpack_unit(data);
             if unit.health > 0u && unit.id > 0u {
                 if unit.team == 1u {
-                    team_g_units += 1u;
+                    out.x += 1u;
                 } else if unit.team == 2u {
-                    team_r_units += 1u;
+                    out.y += 1u;
+                }
+            }
+            if unit.health == 0u && unit.id > 0u {
+                if unit.id == 1u {
+                    out.z += 1u;
+                } else if unit.id == 2u {
+                    out.w += 1u;
                 }
             }
 
         }
     }
     
-    return vec4(team_r_units, team_g_units, 0u, 0u);
+    return out;
 }
 

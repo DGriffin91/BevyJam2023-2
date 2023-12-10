@@ -8,13 +8,9 @@ pub mod post_process;
 pub mod ui;
 pub mod units;
 
-
-
 use bevy::{
     asset::AssetMetaCheck,
-    core_pipeline::{
-        prepass::{DeferredPrepass, DepthPrepass, MotionVectorPrepass},
-    },
+    core_pipeline::prepass::{DeferredPrepass, DepthPrepass, MotionVectorPrepass},
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     math::*,
     pbr::{DefaultOpaqueRendererMethod, NotShadowCaster, PbrPlugin},

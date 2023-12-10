@@ -4,11 +4,9 @@ use bevy::math::*;
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
 
-
 use bevy_picoui::pico::*;
 
 use crate::post_process::PostProcessPass;
-
 
 pub struct UIPlugin;
 
@@ -53,7 +51,7 @@ fn update(_gizmos: Gizmos, mut pico: ResMut<Pico>, windows: Query<&Window>) {
         depth: Some(0.01),
         x: Val::Px(0.0),
         y: Val::Px(0.0),
-        width: Val::Px(minimap_size),
+        width: Val::Px(minimap_size + 30.0 * scale),
         height: Val::Vh(100.0),
         style: ItemStyle {
             background_color: Color::WHITE * 0.1,
@@ -77,27 +75,18 @@ fn update(_gizmos: Gizmos, mut pico: ResMut<Pico>, windows: Query<&Window>) {
         ..default()
     });
 
+    text_section(&mut pico, scale, 0.0, "GEESE", main_box);
+    text_section(&mut pico, scale, 1.0, "LOST", main_box);
+    text_section(&mut pico, scale, 2.0, "DEFEATED", main_box);
+    text_section(&mut pico, scale, 3.0, "ENEMY GEESE", main_box);
+}
+
+fn text_section(pico: &mut Pico, scale: f32, y: f32, text: &str, main_box: ItemIndex) {
+    let y = y * 42.0 + 6.0;
     pico.add(PicoItem {
         x: Val::Px(6.0 * scale),
-        y: Val::Px(6.0 * scale),
-        text: String::from("UNITS"),
-        style: ItemStyle {
-            anchor_text: Anchor::TopLeft,
-            font_size: Val::Px(18.0 * scale),
-            text_alignment: TextAlignment::Left,
-            ..default()
-        },
-        anchor: Anchor::TopLeft,
-        anchor_parent: Anchor::TopLeft,
-
-        parent: Some(main_box),
-        ..default()
-    });
-
-    pico.add(PicoItem {
-        x: Val::Px(6.0 * scale),
-        y: Val::Px(48.0 * scale),
-        text: String::from("ENEMY UNITS"),
+        y: Val::Px(y * scale),
+        text: String::from(text),
         style: ItemStyle {
             anchor_text: Anchor::TopLeft,
             font_size: Val::Px(18.0 * scale),

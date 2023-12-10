@@ -89,7 +89,7 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
 
     var large_rng = sampling::hash_noise(ufrag_coord, globals.frame_count + 45245u);
     var team_rng = i32(round(sampling::hash_noise(ufrag_coord, globals.frame_count + 647132u)));
-    let large_unit_frag_coord = vec2(i32(large_rng * (#{LARGE_UNITS_DATA_WIDTH}.0 - 1.0)), team_rng);
+    let large_unit_frag_coord = vec2(i32(large_rng * #{LARGE_UNITS_DATA_WIDTH}.0), team_rng);
     let large_data = textureLoad(large_unit_tex, large_unit_frag_coord, 0);
     var large_unit = com::unpack_large_unit(large_data, vec2<u32>(large_unit_frag_coord));
 
@@ -98,7 +98,7 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
         if unit.health == 0u && distance(rng, 0.5) < com::SPAWN_RATE * globals.delta_time { 
             unit = com::unpack_unit(vec4(0u));
             unit.health = 255u;
-            unit.id = u32(sampling::hash_noise(ufrag_coord, globals.frame_count + 96421u) * f32(sampling::U32_MAX)) + 1u;
+            unit.id = u32(sampling::hash_noise(ufrag_coord, globals.frame_count + 96421u) * f32(sampling::U32_MAX - 10u)) + 5u;
             unit.dest = ufrag_coord;
             unit.team = u32(team_rng) + 1u;
             out.unit_data = com::pack_unit(unit);
@@ -109,7 +109,7 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
     // -----------------------
 
     // If there is no unit here, return none
-    if unit.health == 0u || unit.id == 0u {
+    if unit.health == 0u {
         out.unit_data = vec4(0u);
         out.attack_data = vec4(0u);
         return out;

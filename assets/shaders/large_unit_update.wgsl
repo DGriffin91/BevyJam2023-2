@@ -12,8 +12,23 @@
 @group(0) @binding(102) var<uniform> command: com::UnitCommand;
 @group(0) @binding(103) var attack_texture: texture_2d<u32>;
 @group(0) @binding(106) var large_unit_tex: texture_2d<u32>;
+@group(0) @binding(107) var minimap_sm_texture: texture_2d<u32>;
+@group(0) @binding(108) var minimap_sm3_texture: texture_2d<u32>;
 
 
+fn get_minimap_sum() -> vec4<u32> {
+    var sum = vec4(0u);
+
+    for (var x = 0; x < 2; x += 1) {
+        for (var y = 0; y < 2; y += 1) {
+            let offset = vec2(x, y);
+            let data = textureLoad(minimap_sm3_texture, offset, 0);
+            sum += data;
+        }
+    }
+
+    return sum;
+}
 
 
 @fragment
@@ -22,9 +37,22 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
     let ufrag_coord = vec2<u32>(frag_coord);
     let ifrag_coord = vec2<i32>(ufrag_coord);
 
-    if ufrag_coord.x == 65u {
+    if ufrag_coord.x >= #{LARGE_UNITS_DATA_WIDTH}u {
+        var out = vec4(0u);
         // Process players
-        return vec4(0u);
+        let team = select(1u, 2u, ufrag_coord.y == 1u);
+        if ufrag_coord.x == #{LARGE_UNITS_DATA_WIDTH}u {
+            let prev = textureLoad(large_unit_tex, ifrag_coord, 0);
+            let minimap_sum = get_minimap_sum();
+            out.x = minimap_sum.z + prev.x;
+            out.y = minimap_sum.w + prev.y;
+            // Kill/Death Tracker / Econ
+            //let kills = minimap_sum[team - 1u]
+        } else {
+            // Extra fragment
+
+        }
+        return out;
     }
 
     let system_index = ufrag_coord.y;
@@ -71,7 +99,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
 
     // See if there's any other large units in close proximity and if so move away a bit
     var other_rng = sampling::hash_noise(ufrag_coord, globals.frame_count + 45245u);
-    let other_unit_frag_coord = vec2(i32(other_rng * (#{LARGE_UNITS_DATA_WIDTH}.0 - 1.0)), ifrag_coord.y);
+    let other_unit_frag_coord = vec2(i32(other_rng * #{LARGE_UNITS_DATA_WIDTH}.0), ifrag_coord.y);
     let other_data = textureLoad(large_unit_tex, other_unit_frag_coord, 0);
     var other_unit = com::unpack_large_unit(other_data, vec2<u32>(other_unit_frag_coord));
     if unit.mode == com::UNIT_MODE_IDLE {

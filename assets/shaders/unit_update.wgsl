@@ -68,7 +68,9 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
                 if attack_damage > 0u && all(read_coord + attack_vector == ifrag_coord) {
                     unit.health -= attack_damage;
                     if unit.health == 0u {
-                        return vec4(0u);
+                        var dead_unit = com::unpack_unit(vec4(0u));
+                        dead_unit.id = unit.team;
+                        return com::pack_unit(dead_unit);
                     }
                 }
             }

@@ -1,5 +1,5 @@
 use bevy::{
-    core_pipeline::{core_2d},
+    core_pipeline::core_2d,
     ecs::query::QueryItem,
     prelude::*,
     render::{
@@ -27,6 +27,10 @@ use crate::{
     },
     minimap::{MinimapTextures, MINIMAP_SCALE},
     shader_def_uint,
+    units::{
+        UnitsDataTextures, ATTACK_RADIUS, LARGE_UNITS_DATA_WIDTH, LARGE_UNITS_TEXTURE_HEIGHT,
+        LARGE_UNITS_TEXTURE_WIDTH, UNITS_DATA_HEIGHT, UNITS_DATA_WIDTH,
+    },
 };
 
 pub struct PostProcessPlugin;
@@ -87,6 +91,7 @@ impl ViewNode for PostProcessNode {
     ) -> Result<(), NodeRunError> {
         let post_process_pipeline = world.resource::<PostProcessPipeline>();
         let minimap_textures = world.resource::<MinimapTextures>();
+        let unit_data_texture = world.resource::<UnitsDataTextures>();
 
         let pipeline_cache = world.resource::<PipelineCache>();
 
@@ -107,6 +112,7 @@ impl ViewNode for PostProcessNode {
                 (102, &post_process_pipeline.sampler),
                 (103, &minimap_textures.minimap_tex.default_view),
                 (104, &minimap_textures.minimap_sm3_tex.default_view),
+                (105, &unit_data_texture.large_unit_b.default_view),
             )),
         );
 
@@ -134,7 +140,17 @@ struct PostProcessPipeline {
 impl FromWorld for PostProcessPipeline {
     fn from_world(world: &mut World) -> Self {
         let mut shader_defs = Vec::new();
-        shader_defs.extend_from_slice(&[shader_def_uint!(MINIMAP_SCALE)]);
+
+        shader_defs.extend_from_slice(&[
+            shader_def_uint!(MINIMAP_SCALE),
+            shader_def_uint!(UNITS_DATA_WIDTH),
+            shader_def_uint!(UNITS_DATA_HEIGHT),
+            shader_def_uint!(LARGE_UNITS_DATA_WIDTH),
+            shader_def_uint!(LARGE_UNITS_TEXTURE_WIDTH),
+            shader_def_uint!(LARGE_UNITS_TEXTURE_HEIGHT),
+            shader_def_uint!(ATTACK_RADIUS),
+        ]);
+
         let render_device = world.resource::<RenderDevice>();
 
         let layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
@@ -146,6 +162,7 @@ impl FromWorld for PostProcessPipeline {
                 fsampler_layout_entry(102),
                 utexture_layout_entry(103, TextureViewDimension::D2), // Minimap
                 utexture_layout_entry(104, TextureViewDimension::D2), // Minimap sm
+                utexture_layout_entry(105, TextureViewDimension::D2), // Large Unit Data
             ],
         });
 

@@ -8,16 +8,14 @@ pub mod post_process;
 pub mod ui;
 pub mod units;
 
-use std::f32::consts::FRAC_PI_4;
+
 
 use bevy::{
     asset::AssetMetaCheck,
     core_pipeline::{
-        fxaa::Fxaa,
         prepass::{DeferredPrepass, DepthPrepass, MotionVectorPrepass},
     },
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
-    input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel},
     math::*,
     pbr::{DefaultOpaqueRendererMethod, NotShadowCaster, PbrPlugin},
     prelude::*,
@@ -27,10 +25,10 @@ use bevy::{
     },
     window::{PresentMode, PrimaryWindow},
 };
-use bevy_basic_camera::{CameraController, CameraControllerPlugin};
-use bevy_mod_taa::{TAABundle, TAAPlugin, TAASettings};
+
+use bevy_mod_taa::{TAAPlugin, TAASettings};
 use bevy_picoui::{pico::Pico2dCamera, PicoPlugin};
-use bevy_ridiculous_ssgi::{ssgi::SSGIPass, SSGIBundle, SSGIPlugin};
+use bevy_ridiculous_ssgi::{ssgi::SSGIPass, SSGIBundle};
 use camera_controller::{OrthoCameraController, OrthoCameraControllerPlugin};
 use minimap::{MinimapPass, MinimapPlugin};
 use particles::{ParticleCommand, ParticlesPass, ParticlesPlugin};
@@ -77,7 +75,7 @@ fn main() {
             //SSGIPlugin, // If you turn this off use the default lighting plugin
             PostProcessPlugin,
             LogDiagnosticsPlugin::default(),
-            FrameTimeDiagnosticsPlugin::default(),
+            FrameTimeDiagnosticsPlugin,
             ExtractResourcePlugin::<UnitTexture>::default(),
             PicoPlugin::default(),
             UIPlugin,

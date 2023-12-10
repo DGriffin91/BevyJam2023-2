@@ -3,12 +3,12 @@ use bevy::core_pipeline::tonemapping::Tonemapping;
 use bevy::math::*;
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
-use bevy::utils::tracing::Instrument;
-use bevy_picoui::palette::RGB_PALETTE;
+
+
 use bevy_picoui::pico::*;
 
 use crate::post_process::PostProcessPass;
-use crate::post_process::PostProcessPlugin;
+
 
 pub struct UIPlugin;
 
@@ -36,7 +36,7 @@ fn setup_2d_camera(mut commands: Commands) {
         .insert(PostProcessPass);
 }
 
-fn update(mut gizmos: Gizmos, mut pico: ResMut<Pico>, windows: Query<&Window>) {
+fn update(_gizmos: Gizmos, mut pico: ResMut<Pico>, windows: Query<&Window>) {
     let Some(window) = windows.iter().next() else {
         return;
     };

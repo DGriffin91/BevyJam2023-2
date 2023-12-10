@@ -153,21 +153,21 @@ macro_rules! image {
 }
 
 pub fn linear_sampler(render_device: &RenderDevice) -> Sampler {
-    let linear_sampler = render_device.create_sampler(&SamplerDescriptor {
+    
+    render_device.create_sampler(&SamplerDescriptor {
         mag_filter: FilterMode::Linear,
         min_filter: FilterMode::Linear,
         ..SamplerDescriptor::default()
-    });
-    linear_sampler
+    })
 }
 
 pub fn nearest_sampler(render_device: &RenderDevice) -> Sampler {
-    let nearest_sampler = render_device.create_sampler(&SamplerDescriptor {
+    
+    render_device.create_sampler(&SamplerDescriptor {
         mag_filter: FilterMode::Nearest,
         min_filter: FilterMode::Nearest,
         ..SamplerDescriptor::default()
-    });
-    nearest_sampler
+    })
 }
 
 pub fn view_binding(world: &World) -> BindingResource<'_> {
@@ -293,7 +293,7 @@ pub fn opaque_target(format: TextureFormat) -> Option<ColorTargetState> {
     })
 }
 
-pub fn load_color_attachment<'a>(view: &'a TextureView) -> Option<RenderPassColorAttachment<'a>> {
+pub fn load_color_attachment(view: &TextureView) -> Option<RenderPassColorAttachment<'_>> {
     Some(RenderPassColorAttachment {
         view,
         resolve_target: None,
@@ -304,7 +304,7 @@ pub fn load_color_attachment<'a>(view: &'a TextureView) -> Option<RenderPassColo
     })
 }
 
-pub fn clear_color_attachment<'a>(view: &'a TextureView) -> Option<RenderPassColorAttachment<'a>> {
+pub fn clear_color_attachment(view: &TextureView) -> Option<RenderPassColorAttachment<'_>> {
     Some(RenderPassColorAttachment {
         view,
         resolve_target: None,
@@ -315,9 +315,9 @@ pub fn clear_color_attachment<'a>(view: &'a TextureView) -> Option<RenderPassCol
     })
 }
 
-pub fn load_depth_attachment<'a>(
-    view: &'a TextureView,
-) -> Option<RenderPassDepthStencilAttachment<'a>> {
+pub fn load_depth_attachment(
+    view: &TextureView,
+) -> Option<RenderPassDepthStencilAttachment<'_>> {
     Some(RenderPassDepthStencilAttachment {
         view,
         depth_ops: Some(Operations {

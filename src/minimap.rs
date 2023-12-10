@@ -3,7 +3,6 @@ use bevy::{
     ecs::query::QueryItem,
     prelude::*,
     render::{
-        camera::ExtractedCamera,
         extract_component::{ExtractComponent, ExtractComponentPlugin},
         render_graph::{
             NodeRunError, RenderGraphApp, RenderGraphContext, ViewNode, ViewNodeRunner,
@@ -15,7 +14,7 @@ use bevy::{
         },
         renderer::{RenderContext, RenderDevice},
         texture::{CachedTexture, TextureCache},
-        view::{ExtractedView, ViewTarget, ViewUniformOffset},
+        view::{ViewTarget, ViewUniformOffset},
         Render, RenderApp, RenderSet,
     },
 };

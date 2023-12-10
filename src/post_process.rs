@@ -1,5 +1,5 @@
 use bevy::{
-    core_pipeline::{core_2d, core_3d},
+    core_pipeline::{core_2d},
     ecs::query::QueryItem,
     prelude::*,
     render::{
@@ -112,7 +112,7 @@ impl ViewNode for PostProcessNode {
 
         let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
             label: Some("post_process_pass"),
-            color_attachments: &[load_color_attachment(&post_process.destination)],
+            color_attachments: &[load_color_attachment(post_process.destination)],
             depth_stencil_attachment: None,
         });
 

@@ -16,11 +16,6 @@ use bevy::{
         render_graph::{
             NodeRunError, RenderGraphApp, RenderGraphContext, ViewNode, ViewNodeRunner,
         },
-        render_resource::{
-            BindGroupEntries, BindGroupLayout, BindGroupLayoutDescriptor, CachedRenderPipelineId,
-            Extent3d, PipelineCache, RenderPassDescriptor, Sampler, ShaderType, TextureDescriptor,
-            TextureDimension, TextureFormat, TextureUsages, TextureViewDimension,
-        },
         renderer::{RenderContext, RenderDevice},
         texture::{CachedTexture, TextureCache},
         view::{ExtractedView, ViewDepthTexture, ViewTarget, ViewUniformOffset},
@@ -33,8 +28,8 @@ use crate::{
     bind_group_utils::{
         basic_fullscreen_tri_pipeline, basic_opaque_pipeline, fsampler_layout_entry,
         globals_binding, globals_layout_entry, load_color_attachment, load_depth_attachment,
-        nearest_sampler, nsampler_layout_entry, opaque_target, uniform_buffer,
-        uniform_layout_entry, utexture_layout_entry, view_binding, view_layout_entry,
+        nearest_sampler, opaque_target, uniform_buffer, uniform_layout_entry,
+        utexture_layout_entry, view_binding, view_layout_entry,
     },
     image, resource, shader_def_uint, UnitTexture,
 };
@@ -143,7 +138,7 @@ impl ViewNode for UnitsNode {
         // Units Evaluate
         // ---------------------------------------
 
-        let mut unit_command = unit_command.clone();
+        let mut unit_command = *unit_command;
         unit_command.delta_time = time.delta_seconds();
 
         let commands_uniform = uniform_buffer(unit_command, render_context, "Unit Command Uniform");

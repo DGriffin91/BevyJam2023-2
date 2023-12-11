@@ -26,6 +26,7 @@
 // Discussion: https://discord.com/channels/691052431525675048/743663924229963868/1182466862190186627
 @group(0) @binding(104) var unit_texture: texture_2d_array<f32>;
 @group(0) @binding(105) var nearest_sampler: sampler;
+@group(0) @binding(106) var large_unit_tex: texture_2d<u32>;
 
 struct VertexOutput {
     // this is `clip position` when the struct is used as a vertex stage output 
@@ -123,17 +124,31 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     out.unit_data = unit_data;
     out.idata_xy = idata_xy;
 
+    
+    var look_dir = unit.step_dir;
+    if unit.mode == com::UNIT_MODE_ATTACK {
+        let attack_data = textureLoad(attack_texture, idata_xy, 0);
+        let attack_vector = vec2<i32>(attack_data.xy) - #{ATTACK_RADIUS};
+        look_dir = com::sign2i(vec2<i32>(attack_vector));
+    } else if unit.mode == com::UNIT_MODE_ATTACK_HYDRA {
+        let other_team_idx = select(0u, 1u, unit.team == 1u);
+        let coord = vec2(unit.attacking_hydra - 1u, other_team_idx);
+        let large_data = textureLoad(large_unit_tex, coord, 0);
+        var large_unit = com::unpack_large_unit(large_data, coord);
+        look_dir = com::sign2i(vec2<i32>(large_unit.pos) - idata_xy);
+    }
+
     var index = i32(unit.id % 7u);
     // TODO optimize 
     if unit.progress > 0.0 {
-        index = select(index, 0, all(unit.step_dir == vec2( 1,  0)));
-        index = select(index, 1, all(unit.step_dir == vec2( 1, -1)));
-        index = select(index, 2, all(unit.step_dir == vec2( 0, -1)));
-        index = select(index, 3, all(unit.step_dir == vec2(-1, -1)));
-        index = select(index, 4, all(unit.step_dir == vec2(-1,  0)));
-        index = select(index, 5, all(unit.step_dir == vec2(-1,  1)));
-        index = select(index, 6, all(unit.step_dir == vec2( 0,  1)));
-        index = select(index, 7, all(unit.step_dir == vec2( 1,  1)));
+        index = select(index, 0, all(look_dir == vec2( 1,  0)));
+        index = select(index, 1, all(look_dir == vec2( 1, -1)));
+        index = select(index, 2, all(look_dir == vec2( 0, -1)));
+        index = select(index, 3, all(look_dir == vec2(-1, -1)));
+        index = select(index, 4, all(look_dir == vec2(-1,  0)));
+        index = select(index, 5, all(look_dir == vec2(-1,  1)));
+        index = select(index, 6, all(look_dir == vec2( 0,  1)));
+        index = select(index, 7, all(look_dir == vec2( 1,  1)));
         if unit.mode == com::UNIT_MODE_ATTACK {
             index += 8;
         }
@@ -169,12 +184,6 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     color = select(color, vec3(0.0, 0.0, 0.0), unit.team == 0u);
     //pbr.material.base_color = vec4(color, 1.0);
 
-    var look_dir = unit.step_dir;
-    if unit.mode == com::UNIT_MODE_ATTACK {
-        let attack_data = textureLoad(attack_texture, in.idata_xy, 0);
-        let attack_vector = vec2<i32>(attack_data.xy) - #{ATTACK_RADIUS};
-        look_dir = com::sign2i(vec2<i32>(attack_vector));
-    }
 
     let uv = vec2(in.uv.x, 1.0 - in.uv.y);
     let mip = 0u; //TODO select mip, TODO only mip 0 works in WebGL2

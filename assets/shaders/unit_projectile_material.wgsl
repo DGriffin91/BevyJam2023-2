@@ -18,6 +18,7 @@
 @group(0) @binding(101) var data_texture: texture_2d<u32>;
 @group(0) @binding(102) var<uniform> commands: com::UnitCommand;
 @group(0) @binding(103) var attack_texture: texture_2d<u32>;
+@group(0) @binding(106) var large_unit_tex: texture_2d<u32>;
 
 struct VertexOutput {
     // this is `clip position` when the struct is used as a vertex stage output 
@@ -72,6 +73,14 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         let iprojectile_dest = iunit_coord + attack_vector;
         let fprojectile_dest = vec3(f32(iprojectile_dest.x), projectile_y, f32(iprojectile_dest.y));
 
+        center = mix(center, fprojectile_dest, saturate(unit.progress));
+    } else if unit.mode == com::UNIT_MODE_ATTACK_HYDRA {
+        let other_team_idx = select(0u, 1u, unit.team == 1u);
+        let coord = vec2(unit.attacking_hydra - 1u, other_team_idx);
+        let large_data = textureLoad(large_unit_tex, coord, 0);
+        var large_unit = com::unpack_large_unit(large_data, coord);
+        
+        let fprojectile_dest = vec3(large_unit.pos.x, 2.0, large_unit.pos.y);
         center = mix(center, fprojectile_dest, saturate(unit.progress));
     } else {
         out.position = vec4(0.0);

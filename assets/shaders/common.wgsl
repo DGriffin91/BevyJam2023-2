@@ -79,6 +79,7 @@ struct Unit {
     dest: vec2<u32>,
     mode: u32,
     team: u32,
+    attacking_hydra: u32,
     id: u32,    
 }
 
@@ -108,10 +109,11 @@ fn unpack_large_unit(data: vec4<u32>, ufrag_coord: vec2<u32>) -> LargeUnit {
     // f16 was not accurate enough for pos given a small enough delta time
     unit.pos = vec2(bitcast<f32>(data.x), bitcast<f32>(data.y)); 
     unit.dest = unpack2x16float(data.z) * 0.01;
-    let d1 = unpack_4x8_(data.w);
+    let d1 = unpack_2x16_(data.w);
+    let d1b = unpack_4x8_(d1.y);
     unit.health = d1.x;
-    unit.mode = d1.y;
-    unit.dir_index = d1.z;
+    unit.mode = d1b.x;
+    unit.dir_index = d1b.y;
     unit.team = select(1u, 2u, ufrag_coord.y == 1u);
 
     return unit;
@@ -130,7 +132,10 @@ fn pack_large_unit(unit: LargeUnit) -> vec4<u32> {
     data.x = bitcast<u32>(unit.pos.x);
     data.y = bitcast<u32>(unit.pos.y);
     data.z = pack2x16float(unit.dest * 100.0);
-    data.w = pack_4x8_(vec4(unit.health, unit.mode, unit.dir_index, 0u));
+    data.w = pack_2x16_(vec2(
+        unit.health,
+        pack_4x8_(vec4(unit.mode, unit.dir_index, 0u, 0u)),
+    ));
 
     return data;
 }
@@ -141,6 +146,7 @@ const UNIT_MODE_IDLE: u32 = 0u;
 const UNIT_MODE_MOVE: u32 = 1u;
 const UNIT_MODE_MOVEING: u32 = 2u;
 const UNIT_MODE_ATTACK: u32 = 3u;
+const UNIT_MODE_ATTACK_HYDRA: u32 = 4u;
 
 const SPEED_MOVE: f32 = 5.0;
 const SPEED_ATTACK: f32 = 1.0;
@@ -148,7 +154,8 @@ const SMALL_UNIT_SIZE: f32 = 1.0;
 
 const LARGE_SPEED_MOVE: f32 = 5.0;
 const LARGE_SPEED_ATTACK: f32 = 1.0;
-const LARGE_UNIT_SIZE: f32 = 4.0;
+const LARGE_UNIT_SIZE: f32 = 4.0;  
+const HYDRA_INIT_HEALTH: u32 = 65535u;  
 
 const SPAWN_RADIUS: f32 = 8.0;
 const SPAWN_RATE: f32 = 0.6;
@@ -165,7 +172,7 @@ struct UnitStats {
 // Why can't I use #{LARGE_UNITS_DATA_WIDTH}u here?
 fn get_unit_stats(large_unit_tex: texture_2d<u32>, ludw: u32, team: u32) -> UnitStats {
     var stats: UnitStats;
-    let team1_buff = select(1.0, 1.4, team == 1u);
+    let team1_buff = select(1.0, 1.3, team == 1u);
     let upgrades = sqrt(vec4<f32>(textureLoad(large_unit_tex, vec2(ludw + 1u, team - 1u), 0) + 1u));
     stats.move_rate = upgrades.x * SPEED_MOVE;
     stats.attack_rate = upgrades.y * SPEED_ATTACK * team1_buff;
@@ -178,7 +185,9 @@ fn get_unit_stats(large_unit_tex: texture_2d<u32>, ludw: u32, team: u32) -> Unit
 
 fn unpack_unit(data: vec4<u32>) -> Unit {
     var unit: Unit;
-    unit.progress = unpack2x16float(data.x).x; //spare 16 bits
+    let a = unpack2x16float(data.x);
+    unit.progress = a.x;
+    unit.attacking_hydra = u32(a.y);
     let d = unpack_4x8_(data.y);
     unit.step_dir = vec2<i32>(unpack_2x4_from_8(d.x)) - 1;
     // d.y is spare
@@ -193,7 +202,8 @@ fn unpack_unit(data: vec4<u32>) -> Unit {
 
 fn pack_unit(unit: Unit) -> vec4<u32> {
     return vec4<u32>(
-        pack2x16float(vec2(unit.progress, 0.0)), //spare 16 bits
+        // TODO don't need 16 bits here for attacking_hydra, shouldn't use float
+        pack2x16float(vec2(unit.progress, f32(unit.attacking_hydra))), 
         pack_4x8_(vec4(
                 pack_2x4_to_8(vec2(
                     u32(unit.step_dir.x + 1),

@@ -39,15 +39,19 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
 
     if unit.progress >= 1.0 {
         unit.mode = com::UNIT_MODE_IDLE;
+        unit.attacking_hydra = 0u;
     }
 
     
     var step_mult = 0.0;
     if unit.mode == com::UNIT_MODE_MOVEING {
         step_mult = unit_stats.move_rate;
-    } else if unit.mode == com::UNIT_MODE_ATTACK {
+    } else if unit.mode == com::UNIT_MODE_ATTACK || unit.mode == com::UNIT_MODE_ATTACK_HYDRA {
         step_mult = unit_stats.attack_rate;
+    } else if unit.mode == com::UNIT_MODE_ATTACK_HYDRA {
+        step_mult = unit_stats.attack_rate * 0.5;
     }
+
     unit.progress += globals.delta_time * step_mult;
 
     // if there is living unit in this cell check if it moved to another cell last frame
@@ -98,6 +102,7 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
     let spawn_unit_stats = com::get_unit_stats(large_unit_tex, #{LARGE_UNITS_DATA_WIDTH}u, team_rng);
 
     let rng = sampling::hash_noise(ufrag_coord + globals.frame_count, globals.frame_count + 34121u);
+
     if large_unit.health > 0u && distance(large_unit.pos.xy, frag_coord.xy) < spawn_unit_stats.spawn_radius {
         if unit.health == 0u && distance(rng, 0.5) < spawn_unit_stats.spawn_rate * globals.delta_time { 
             unit = com::unpack_unit(vec4(0u));
@@ -110,6 +115,8 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
             return out;
         }
     }
+    
+
     // -----------------------
 
     // If there is no unit here, return none
@@ -125,6 +132,17 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
             unit.mode = com::UNIT_MODE_MOVE;
             unit.progress = 0.0;
         }
+    }
+
+    
+    if unit.health > 0u && 
+       // unit.mode == com::UNIT_MODE_IDLE && not working
+       large_unit.health > 0u && 
+       large_unit.team != unit.team &&
+       distance(large_unit.pos, vec2<f32>(ufrag_coord)) < #{ATTACK_RADIUS}.0 - 1.0 {
+        unit.attacking_hydra = u32(large_unit_frag_coord.x) + 1u;
+        unit.mode = com::UNIT_MODE_ATTACK_HYDRA;
+        unit.progress = 0.0;
     }
     
     var clear_attack_data = true;
@@ -165,7 +183,7 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
     }
 
 
-    if unit.mode == com::UNIT_MODE_IDLE || unit.mode == com::UNIT_MODE_MOVE && !all(ufrag_coord == unit.dest) {
+    if unit.mode == com::UNIT_MODE_IDLE || (unit.mode == com::UNIT_MODE_MOVE && !all(ufrag_coord == unit.dest)) {
         let f_to_dest = vec2<f32>(unit.dest) - vec2<f32>(ufrag_coord);
 
         var dir_noise = vec2(0.0);

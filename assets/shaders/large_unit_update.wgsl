@@ -100,7 +100,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
     // if unit.health == 0u && distance(rng, 0.5) < 0.001 * globals.delta_time {
     if unit.health == 0u && ufrag_coord.x == 0u && globals.frame_count < 5000u {
         unit = com::unpack_large_unit(vec4(0u), ufrag_coord);
-        unit.health = 255u;
+        unit.health = com::HYDRA_INIT_HEALTH;
         var spawn = vec2(
             sampling::hash_noise(ufrag_coord + globals.frame_count, globals.frame_count + 43567u),
             sampling::hash_noise(ufrag_coord + globals.frame_count, globals.frame_count + 56423u),
@@ -157,6 +157,32 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
         unit.dir_index = select(unit.dir_index, 5u, all(step_dir == vec2(-1,  1)));
         unit.dir_index = select(unit.dir_index, 6u, all(step_dir == vec2( 0,  1)));
         unit.dir_index = select(unit.dir_index, 7u, all(step_dir == vec2( 1,  1)));
+    }
+
+    
+    let radius = #{ATTACK_RADIUS};
+    // Check if a unit attacked us
+    for (var x = -radius; x <= radius; x += 1) {
+        for (var y = -radius; y <= radius; y += 1) {
+            let offset = vec2(x, y);
+            let read_coord = vec2<i32>(unit.pos) + offset;
+
+            let other_data = textureLoad(data_texture, read_coord, 0);
+            let other_unit = com::unpack_unit(other_data);
+            let attack_damage = 1u;
+
+            if attack_damage > 0u && other_unit.attacking_hydra > 0u && 
+               other_unit.attacking_hydra - 1u == ufrag_coord.x && other_unit.team != unit.team &&
+               other_unit.progress > 0.9
+               
+               {
+                unit.health -= attack_damage;
+                if unit.health == 0u {
+                    var dead_unit = com::unpack_large_unit(vec4(0u), ufrag_coord);
+                    return com::pack_large_unit(dead_unit);
+                }
+            }
+        }
     }
 
     return com::pack_large_unit(unit);

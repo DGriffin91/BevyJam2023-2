@@ -82,17 +82,19 @@ fn update(
         ..default()
     });
 
-    pico.add(text_section(scale, 0.0, "GEESE", main_box));
-    pico.add(text_section(scale, 1.0, "LOST", main_box));
-    pico.add(text_section(scale, 2.0, "DEFEATED", main_box));
-    pico.add(text_section(scale, 3.0, "ENEMY GEESE", main_box));
-    pico.add(text_section(scale, 4.0, "CREDITS", main_box));
-    pico.add(text_section(scale, 6.0, "UPGRADES", main_box));
+    pico.add(text_section(scale, 0.0, "HYDRA HEALTH", main_box));
+    pico.add(text_section(scale, 1.0, "ENEMY HYDRA", main_box));
+    pico.add(text_section(scale, 2.0, "GEESE", main_box));
+    pico.add(text_section(scale, 3.0, "LOST", main_box));
+    pico.add(text_section(scale, 4.0, "DEFEATED", main_box));
+    pico.add(text_section(scale, 5.0, "ENEMY GEESE", main_box));
+    pico.add(text_section(scale, 6.0, "CREDITS", main_box));
+    pico.add(text_section(scale, 8.0, "UPGRADES", main_box));
 
     let btn = ubutton(
         &mut pico,
         scale,
-        text_section(scale, 7.0, "MOVMENT", main_box),
+        text_section(scale, 9.0, "MOVMENT", main_box),
     );
     if pico.clicked(&btn) {
         dbg!("!!!!!!!!!!");
@@ -101,7 +103,7 @@ fn update(
     let btn = ubutton(
         &mut pico,
         scale,
-        text_section(scale, 8.0, "ATTACK", main_box),
+        text_section(scale, 10.0, "ATTACK", main_box),
     );
     if pico.clicked(&btn) {
         unit_command.upgrade_attack_rate();
@@ -109,7 +111,7 @@ fn update(
     let btn = ubutton(
         &mut pico,
         scale,
-        text_section(scale, 9.0, "SPAWN", main_box),
+        text_section(scale, 11.0, "SPAWN", main_box),
     );
     if pico.clicked(&btn) {
         unit_command.upgrade_spawn_rate();

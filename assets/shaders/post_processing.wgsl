@@ -2,6 +2,7 @@
 #import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
 #import "shaders/printing.wgsl" as printing
 #import bevy_pbr::mesh_view_bindings::{view, globals}
+#import "shaders/common.wgsl" as com
 
 @group(0) @binding(101) var screen_texture: texture_2d<f32>;
 @group(0) @binding(102) var texture_sampler: sampler;
@@ -79,6 +80,11 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     var t1upgrades = textureLoad(large_unit_tex, vec2(#{LARGE_UNITS_DATA_WIDTH}u + 1u, 0u), 0);
     var t2upgrades = textureLoad(large_unit_tex, vec2(#{LARGE_UNITS_DATA_WIDTH}u + 1u, 1u), 0);
 
+    let t1hydata = textureLoad(large_unit_tex, vec2(0u, 0u), 0);
+    let t1hydra = com::unpack_large_unit(t1hydata, vec2(0u, 0u));
+    let t2hydata = textureLoad(large_unit_tex, vec2(0u, 1u), 0);
+    let t2hydra = com::unpack_large_unit(t2hydata, vec2(0u, 1u));
+
     let left_align = 180.0;
 
     let t1_alive = minimap_sum.x;
@@ -91,25 +97,26 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let upgrade_movment_cost = u32(sqrt(f32(t1upgrades.x + 1u)));
     let upgrade_attack_cost = u32(sqrt(f32(t1upgrades.y + 1u)));
     let upgrade_spawn_cost = u32(sqrt(f32(t1upgrades.z + 1u)));
+    color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 5, t1hydra.health);
+    color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 6, t2hydra.health);
+    color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 7, t1_alive);
+    color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 8, t1_lost);
+    color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 9, t2_lost);
+    color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 10, t2_alive);
+    color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 11, t1_credits);
+    color = print_value(fcoord.xy - vec2(left_align - 70.0, 21.0), color, 14, upgrade_movment_cost);
+    color = print_value(fcoord.xy - vec2(left_align - 70.0, 21.0), color, 15, upgrade_attack_cost);
+    color = print_value(fcoord.xy - vec2(left_align - 70.0, 21.0), color, 16, upgrade_spawn_cost);
+    color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 14, t1upgrades.x);
+    color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 15, t1upgrades.y);
+    color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 16, t1upgrades.z);
 
-    color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 5, t1_alive);
-    color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 6, t1_lost);
-    color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 7, t2_lost);
-    color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 8, t2_alive);
-    color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 9, t1_credits);
-    color = print_value(fcoord.xy - vec2(left_align - 70.0, 21.0), color, 12, upgrade_movment_cost);
-    color = print_value(fcoord.xy - vec2(left_align - 70.0, 21.0), color, 13, upgrade_attack_cost);
-    color = print_value(fcoord.xy - vec2(left_align - 70.0, 21.0), color, 14, upgrade_spawn_cost);
-    color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 12, t1upgrades.x);
-    color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 13, t1upgrades.y);
-    color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 14, t1upgrades.z);
-
-    color = print_value(fcoord.xy - vec2(left_align + 50.0, 21.0), color, 12, t2upgrades.x);
-    color = print_value(fcoord.xy - vec2(left_align + 50.0, 21.0), color, 13, t2upgrades.y);
-    color = print_value(fcoord.xy - vec2(left_align + 50.0, 21.0), color, 14, t2upgrades.z);
+    color = print_value(fcoord.xy - vec2(left_align + 50.0, 21.0), color, 14, t2upgrades.x);
+    color = print_value(fcoord.xy - vec2(left_align + 50.0, 21.0), color, 15, t2upgrades.y);
+    color = print_value(fcoord.xy - vec2(left_align + 50.0, 21.0), color, 16, t2upgrades.z);
 
 
-    //color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 14, t1upgrades.w);
+    //color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 15, t1upgrades.w);
 
     return color;
 }

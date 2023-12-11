@@ -36,6 +36,8 @@ struct VertexOutput {
     @location(5) velocity: vec4<f32>,
     @location(6) particle_index: u32,
     @location(7) system_index: u32,
+    @location(8) splash: u32,
+
 }
 
 struct Vertex {
@@ -57,18 +59,32 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let data_y = i32(out.particle_index / dims.x);
 
     let data = textureLoad(data_texture, vec2<i32>(data_x, data_y), 0);
+    var velocity = xyz8e5_to_vec3_(bitcast<u32>(data.w));
+    let vel_scale = length(velocity);
+    var new_pos = data.xyz;
+
+    let pixel_radius = 1.0 / (0.5 * view.viewport.w * view.projection[1][1]);
 
     let center = data.xyz;
-    let size = 0.04;//data.w;
+    var sizex = pixel_radius * 0.2;
+    var sizey = max(0.8, pixel_radius * 3.0);
+
+    var splash = 0u;
+
+    if new_pos.y <= 5.0 {
+        sizex = max(0.15, pixel_radius * 0.5);
+        sizey = max(0.15, pixel_radius * 0.5);
+        splash = 1u;
+    }
 
 
     let idx = vertex.index % 6u;
 
     let vert_pos = vec3(
-        select(-1.0, 1.0, idx == 1u || idx == 4u || idx == 5u), 
-        select(-1.0, 1.0, idx == 2u || idx == 3u || idx == 5u),
+        select(-1.0, 1.0, idx == 1u || idx == 4u || idx == 5u) * sizex, 
+        select(-1.0, 1.0, idx == 2u || idx == 3u || idx == 5u) * sizey,
         0.0,
-    ) * size;
+    );
 
 
 #ifdef LOCK_ROTATION
@@ -88,7 +104,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
     out.position = position;
     out.velocity = vec4(xyz8e5_to_vec3_(bitcast<u32>(data.w)), 1.0);
-
+    out.splash = splash;
 
     return out;
 }
@@ -107,11 +123,17 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     let system = systems[in.system_index];
 
     var pbr = pbr_input_new();
-    pbr.N = V;
-    pbr.material.flags |= STANDARD_MATERIAL_FLAGS_UNLIT_BIT;
+    pbr.N = vec3(0.0, -1.0, 0.0);
+    //pbr.material.flags |= STANDARD_MATERIAL_FLAGS_UNLIT_BIT;
     
-    let color = mix(vec3(1.0, 0.0, 0.0) * 3.0, vec3(0.1, 0.2, 1.0) * 120.0, saturate(pow(length(in.velocity.xyz), 1.0) * 2.0));
-    pbr.material.base_color = vec4(color / system.age, 1.0);
+    let color = mix(vec3(1.0, 0.0, 0.0) * 1.0, vec3(0.1, 0.2, 0.5) * 1.0, saturate(pow(length(in.velocity.xyz), 1.0) * 2.0));
+    pbr.material.base_color = vec4(color * 0.15, 1.0);
+    if in.splash == 1u {
+        pbr.material.base_color = vec4(0.2, 0.1, 0.1, 1.0);
+    }
+    pbr.material.reflectance = 0.4;
+    pbr.material.perceptual_roughness = 1.0;
+
 
 
     out.deferred = deferred_gbuffer_from_pbr_input(pbr);

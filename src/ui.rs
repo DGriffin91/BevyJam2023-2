@@ -93,7 +93,7 @@ fn update(
     let btn = ubutton(
         &mut pico,
         scale,
-        text_section(scale, 9.0, "MOVMENT", main_box),
+        text_section(scale, 9.0, "MOVEMENT", main_box),
     );
     if pico.clicked(&btn) {
         unit_command.upgrade_movment_rate();

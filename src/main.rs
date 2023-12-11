@@ -30,9 +30,8 @@ use bevy_picoui::{
 use bevy_ridiculous_ssgi::{ssgi::SSGIPass, SSGIBundle};
 use camera_controller::{OrthoCameraController, OrthoCameraControllerPlugin};
 use minimap::{MinimapPass, MinimapPlugin};
-use particles::{ParticleCommand, ParticlesPass, ParticlesPlugin};
+use particles::{ParticlesPass, ParticlesPlugin};
 use post_process::PostProcessPlugin;
-use shared_exponent_formats::{rgb9e5::vec3_to_rgb9e5, xyz8e5::vec3_to_xyz8e5};
 use ui::UIPlugin;
 use units::{UnitCommand, UnitsPass, UnitsPlugin};
 
@@ -80,10 +79,7 @@ fn main() {
             UIPlugin,
         ))
         .add_systems(Startup, (setup, load_unit_texture))
-        .add_systems(
-            Update,
-            (restart_particle_system, command_units, adjust_spec),
-        )
+        .add_systems(Update, (command_units, adjust_spec))
         .run();
 }
 
@@ -232,23 +228,6 @@ fn setup(
             },
             ..default()
         });
-}
-
-fn restart_particle_system(mut commands: Commands, mouse_button_input: Res<Input<MouseButton>>) {
-    if mouse_button_input.just_pressed(MouseButton::Left) {
-        commands.spawn(ParticleCommand {
-            spawn_position: vec3(0.0, 10.0, 0.0),
-            spawn_spread: vec3_to_rgb9e5(vec3(2.0, 2.0, 2.0).into()),
-            velocity: vec3_to_xyz8e5(vec3(0.0, 0.01, 0.01).into()),
-            direction_random_spread: 0.8,
-            category: 0u32,
-            flags: 0u32,
-            color1_: 0u32,
-            color2_: 0u32,
-            _webgl2_padding_1_: 0.0,
-            _webgl2_padding_2_: 0.0,
-        });
-    }
 }
 
 pub fn from_screenspace(

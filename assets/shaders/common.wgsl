@@ -2,10 +2,110 @@
 #import bevy_pbr::mesh_bindings
 #import bevy_render::instance_index::get_instance_index
 #import bevy_pbr::mesh_functions
-#import "shaders/xyz8e5.wgsl"::{xyz8e5_to_vec3_, vec3_to_xyz8e5_}
-#import "shaders/rgb9e5.wgsl"::{rgb9e5_to_vec3_, vec3_to_rgb9e5_}
+//#import "shaders/xyz8e5.wgsl"::{xyz8e5_to_vec3_, vec3_to_xyz8e5_}
+//#import "shaders/rgb9e5.wgsl"::{rgb9e5_to_vec3_, vec3_to_rgb9e5_}
 #import "shaders/sampling.wgsl" as sampling
 #import bevy_pbr::view_transformations as vt
+
+// ----------------------------------
+// ----------------------------------
+// ----------------------------------
+// ----------------------------------
+// ----------------------------------
+// ----------------------------------
+// ----------------------------------
+// ----------------------------------
+/*
+
+In wasm would sporadically get: 
+
+error: required import '"shaders/rgb9e5.wgsl"' not found
+    ┌─ shaders/common.wgsl:242:38
+    │
+242 │         pbr.material.emissive = vec4(rgb9e5_to_vec3_(in.x), 1.0);
+    │                                      ^
+    │
+    = missing import '"shaders/rgb9e5.wgsl"'
+
+*/
+
+
+// #define_import_path ssgi::rgb9e5
+// https://github.com/DGriffin91/shared_exponent_formats/blob/main/src/wgsl/rgb9e5.wgsl
+
+const RGB9E5_EXPONENT_BITS        = 5u;
+const RGB9E5_MANTISSA_BITS        = 9;
+const RGB9E5_MANTISSA_BITSU       = 9u;
+const RGB9E5_EXP_BIAS             = 15;
+const RGB9E5_MAX_VALID_BIASED_EXP = 31u;
+
+//#define MAX_RGB9E5_EXP               (RGB9E5_MAX_VALID_BIASED_EXP - RGB9E5_EXP_BIAS)
+//#define RGB9E5_MANTISSA_VALUES       (1<<RGB9E5_MANTISSA_BITS)
+//#define MAX_RGB9E5_MANTISSA          (RGB9E5_MANTISSA_VALUES-1)
+//#define MAX_RGB9E5                   ((f32(MAX_RGB9E5_MANTISSA))/RGB9E5_MANTISSA_VALUES * (1<<MAX_RGB9E5_EXP))
+//#define EPSILON_RGB9E5_              ((1.0/RGB9E5_MANTISSA_VALUES) / (1<<RGB9E5_EXP_BIAS))
+
+const MAX_RGB9E5_EXP              = 16u;
+const RGB9E5_MANTISSA_VALUES      = 512;
+const MAX_RGB9E5_MANTISSA         = 511;
+const MAX_RGB9E5_MANTISSAU        = 511u;
+const MAX_RGB9E5_                 = 65408.0;
+const EPSILON_RGB9E5_             = 0.000000059604645;
+
+fn floor_log2_(x: f32) -> i32 {
+    let f = bitcast<u32>(x);
+    let biasedexponent = (f & 0x7F800000u) >> 23u;
+    return i32(biasedexponent) - 127;
+}
+
+// https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_texture_shared_exponent.txt
+fn vec3_to_rgb9e5_(rgb_in: vec3<f32>) -> u32 {
+    let rgb = clamp(rgb_in, vec3(0.0), vec3(MAX_RGB9E5_));
+
+    let maxrgb = max(rgb.r, max(rgb.g, rgb.b));
+    var exp_shared = max(-RGB9E5_EXP_BIAS - 1, floor_log2_(maxrgb)) + 1 + RGB9E5_EXP_BIAS;
+    var denom = exp2(f32(exp_shared - RGB9E5_EXP_BIAS - RGB9E5_MANTISSA_BITS));
+
+    let maxm = i32(floor(maxrgb / denom + 0.5));
+    if (maxm == RGB9E5_MANTISSA_VALUES) {
+        denom *= 2.0;
+        exp_shared += 1;
+    }
+
+    let n = vec3<u32>(floor(rgb / denom + 0.5));
+    
+    return (u32(exp_shared) << 27u) | (n.b << 18u) | (n.g << 9u) | (n.r << 0u);
+}
+
+// Builtin extractBits() is not working on WEBGL or DX12
+// DX12: HLSL: Unimplemented("write_expr_math ExtractBits")
+fn extract_bits(value: u32, offset: u32, bits: u32) -> u32 {
+    let mask = (1u << bits) - 1u;
+    return (value >> offset) & mask;
+}
+
+fn rgb9e5_to_vec3_(v: u32) -> vec3<f32> {
+    let exponent = i32(extract_bits(v, 27u, RGB9E5_EXPONENT_BITS)) - RGB9E5_EXP_BIAS - RGB9E5_MANTISSA_BITS;
+    let scale = exp2(f32(exponent));
+
+    return vec3(
+        f32(extract_bits(v, 0u, RGB9E5_MANTISSA_BITSU)),
+        f32(extract_bits(v, 9u, RGB9E5_MANTISSA_BITSU)),
+        f32(extract_bits(v, 18u, RGB9E5_MANTISSA_BITSU))
+    ) * scale;
+}
+
+
+// ----------------------------------
+// ----------------------------------
+// ----------------------------------
+// ----------------------------------
+// ----------------------------------
+// ----------------------------------
+// ----------------------------------
+// ----------------------------------
+// ----------------------------------
+
 
 #import bevy_pbr::{
     pbr_types::STANDARD_MATERIAL_FLAGS_UNLIT_BIT,
@@ -98,14 +198,6 @@ struct LargeUnit {
 fn unpack_large_unit(data: vec4<u32>, ufrag_coord: vec2<u32>) -> LargeUnit {
     var unit: LargeUnit;
 
-    //unit.pos = unpack2x16float(data.x) * 0.001;
-    //unit.dest = unpack2x16float(data.y) * 0.001;
-    //unit.progress = unpack2x16float(data.z).x; // Spare 16 bits
-    //let d1 = unpack_4x8_(data.w);
-    //unit.health = d1.x;
-    //unit.mode = d1.y;
-    //unit.team = select(1u, 2u, ufrag_coord.y == 1u);
-
     // f16 was not accurate enough for pos given a small enough delta time
     unit.pos = vec2(bitcast<f32>(data.x), bitcast<f32>(data.y)); 
     unit.dest = unpack2x16float(data.z) * 0.01;
@@ -122,11 +214,6 @@ fn unpack_large_unit(data: vec4<u32>, ufrag_coord: vec2<u32>) -> LargeUnit {
 
 fn pack_large_unit(unit: LargeUnit) -> vec4<u32> {
     var data = vec4(0u);
-
-    //data.x = pack2x16float(unit.pos * 1000.0);
-    //data.y = pack2x16float(unit.dest * 1000.0);
-    //data.z = pack2x16float(vec2(unit.progress, 0.0)); // Spare 16 bits
-    //data.w = pack_4x8_(vec4(unit.health, unit.mode, 0u, 0u));
 
     // f16 was not accurate enough for pos given a small enough delta time
     data.x = bitcast<u32>(unit.pos.x);
@@ -155,7 +242,7 @@ const SMALL_UNIT_SIZE: f32 = 1.0;
 const LARGE_SPEED_MOVE: f32 = 5.0;
 const LARGE_SPEED_ATTACK: f32 = 1.0;
 const LARGE_UNIT_SIZE: f32 = 4.0;  
-const HYDRA_INIT_HEALTH: u32 = 65535u;  
+const HYDRA_INIT_HEALTH: u32 = 25000u;  
 
 const SPAWN_RADIUS: f32 = 8.0;
 const SPAWN_RATE: f32 = 0.6;
@@ -163,6 +250,7 @@ const SPAWN_RATE: f32 = 0.6;
 struct UnitStats {
     move_rate: f32,
     attack_rate: f32,
+    attack_mult: f32,
     large_move_rate: f32,
     large_attack_rate: f32,
     spawn_radius: f32,
@@ -172,10 +260,11 @@ struct UnitStats {
 // Why can't I use #{LARGE_UNITS_DATA_WIDTH}u here?
 fn get_unit_stats(large_unit_tex: texture_2d<u32>, ludw: u32, team: u32) -> UnitStats {
     var stats: UnitStats;
-    let team1_buff = select(1.0, 1.3, team == 1u);
+    let team1_buff = select(1.0, 1.15, team == 1u);
     let upgrades = sqrt(vec4<f32>(textureLoad(large_unit_tex, vec2(ludw + 1u, team - 1u), 0) + 1u));
     stats.move_rate = upgrades.x * SPEED_MOVE;
     stats.attack_rate = upgrades.y * SPEED_ATTACK * team1_buff;
+    stats.attack_mult = upgrades.y * 0.2;
     stats.large_move_rate = upgrades.x * LARGE_SPEED_MOVE;
     stats.large_attack_rate = upgrades.y * LARGE_SPEED_ATTACK;
     stats.spawn_radius = upgrades.z * SPAWN_RADIUS;

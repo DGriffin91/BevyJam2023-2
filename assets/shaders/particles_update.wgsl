@@ -29,6 +29,8 @@ struct ParticleSystem {
 @group(0) @binding(102) var<uniform> commands: array<ParticleCommand, 12u>;
 @group(0) @binding(103) var<uniform> systems: array<ParticleSystem, 128u>; // Check your assignment for a command index (frag_coord.y == )
 
+// see e0e3dad6a4fcfc40df77b1174920b18f7a831d6e or earlier for usable particle system
+
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let frag_coord = in.position.xy;
@@ -46,39 +48,25 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let particle_size = 0.01;
 
     let system = systems[system_index];
-    if system.command_assignment <= 12u {
-        let command = commands[system.command_assignment];
-        let spawn_spread = rgb9e5_to_vec3_(command.spawn_spread);
-        new_pos = command.spawn_position;
-        //new_pos.x += (sampling::hash_noise(ufrag_coord, globals.frame_count + 56432u) * 2.0 - 1.0) * spawn_spread.x;
-        //new_pos.y += (sampling::hash_noise(ufrag_coord, globals.frame_count + 45674u) * 2.0 - 1.0) * spawn_spread.y;
-        //new_pos.z += (sampling::hash_noise(ufrag_coord, globals.frame_count + 12344u) * 2.0 - 1.0) * spawn_spread.z;
-        velocity = xyz8e5_to_vec3_(command.velocity);
-        let velocity_rnd = vec2(
-            sampling::hash_noise(ufrag_coord, 5345u),
-            sampling::hash_noise(ufrag_coord, 6784u),
-        );
-        let velocity_dir = normalize(velocity);
-        let velocity_basis = sampling::build_orthonormal_basis(velocity_dir);
-        velocity = normalize(sampling::uniform_sample_cone(velocity_rnd, command.direction_random_spread) * velocity_basis) * length(velocity);
-    } else {
-        if data.y < particle_size {
-            if sampling::hash_noise(ufrag_coord, globals.frame_count) > 0.99 || vel_scale < 0.001 {
-                new_pos.y = sampling::hash_noise(ufrag_coord, globals.frame_count + 1024u) * 1.0 + 5.0;
-                new_pos.z = (sampling::hash_noise(ufrag_coord, globals.frame_count) * 2.0 - 1.0) * 0.5;
-                new_pos.x = (sampling::hash_noise(ufrag_coord, globals.frame_count + 52345u) * 2.0 - 1.0) * 0.5;
-                velocity.y = 0.01;
-                velocity.x = (sampling::hash_noise(ufrag_coord, globals.frame_count + 2048u) * 2.0 - 1.0) * 0.01;
-                velocity.z = (sampling::hash_noise(ufrag_coord, globals.frame_count + 4096u) * 2.0 - 1.0) * 0.01;
-            } else {
-                let damping = mix(0.5, 0.8, sampling::hash_noise(ufrag_coord, globals.frame_count + 1024u));
-                let R = reflect(normalize(velocity), vec3(0.0, 1.0, 0.0));
-                velocity = R * damping * vel_scale;
-            }
-        }
-        new_pos += velocity;
-        velocity.y -= 0.000001;
+
+    if sampling::hash_noise(ufrag_coord + globals.frame_count, globals.frame_count + 2048u) > 0.999 || vel_scale < 0.001  {
+        new_pos.y = sampling::hash_noise(ufrag_coord, globals.frame_count + 1024u) * 2.0 + 300.0;
+        new_pos.z = (sampling::hash_noise(ufrag_coord, globals.frame_count) * 2.0 - 1.0) * 500.0 + 128.0;
+        new_pos.x = (sampling::hash_noise(ufrag_coord, globals.frame_count + 52345u) * 2.0 - 1.0) * 500.0 + 128.0;
+        let rng_velx = sampling::hash_noise(ufrag_coord, globals.frame_count + 67353u) * 2.0 - 1.0;
+        let rng_vely = sampling::hash_noise(ufrag_coord, globals.frame_count + 45341u);
+        let rng_velz = sampling::hash_noise(ufrag_coord, globals.frame_count + 89921u) * 2.0 - 1.0;
+        velocity = vec3(rng_velx * 0.001, -0.1 - rng_vely * 0.01, rng_velz * 0.001);
     }
+    if new_pos.y <= 5.0 {
+        let damping = mix(0.3, 0.8, sampling::hash_noise(ufrag_coord, globals.frame_count + 1024u));
+        let R = reflect(normalize(velocity), vec3(0.0, 0.0, 0.0));
+        velocity = R * damping * vel_scale;
+    }
+    
+    new_pos += velocity; // * globals.delta_time * 100.0
+    velocity.y -= 0.001 * globals.delta_time * 100.0;
+    
 
 
     

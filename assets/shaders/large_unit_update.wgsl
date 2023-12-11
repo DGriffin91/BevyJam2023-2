@@ -169,14 +169,14 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
 
             let other_data = textureLoad(data_texture, read_coord, 0);
             let other_unit = com::unpack_unit(other_data);
-            let attack_damage = 1u;
+            let other_unit_stats = com::get_unit_stats(large_unit_tex, #{LARGE_UNITS_DATA_WIDTH}u, other_unit.team);
+            let attack_damage = 1u + u32(other_unit_stats.attack_mult);
 
             if attack_damage > 0u && other_unit.attacking_hydra > 0u && 
                other_unit.attacking_hydra - 1u == ufrag_coord.x && other_unit.team != unit.team &&
-               other_unit.progress > 0.9
-               
-               {
-                unit.health -= attack_damage;
+               other_unit.progress > 0.9 {
+                var health = i32(unit.health) - i32(attack_damage);
+                unit.health = u32(max(health, 0));
                 if unit.health == 0u {
                     var dead_unit = com::unpack_large_unit(vec4(0u), ufrag_coord);
                     return com::pack_large_unit(dead_unit);

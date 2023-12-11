@@ -49,7 +49,7 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
     } else if unit.mode == com::UNIT_MODE_ATTACK || unit.mode == com::UNIT_MODE_ATTACK_HYDRA {
         step_mult = unit_stats.attack_rate;
     } else if unit.mode == com::UNIT_MODE_ATTACK_HYDRA {
-        step_mult = unit_stats.attack_rate * 0.5;
+        step_mult = unit_stats.attack_rate;
     }
 
     unit.progress += globals.delta_time * step_mult;
@@ -74,25 +74,8 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
             }
         }
     }    
-    
-    // -----------------------
-    //// --- Random spawn ---
-    //let rng = sampling::hash_noise(ufrag_coord + globals.frame_count, globals.frame_count + 34121u);
-    //if in.uv.y < 0.2 || in.uv.y > 0.8 {
-    //    if unit.health == 0u && distance(rng, 0.5) < 0.0005 * globals.delta_time {
-    //        unit = com::unpack_unit(vec4(0u));
-    //        unit.health = 255u;
-    //        unit.id = u32(sampling::hash_noise(ufrag_coord, globals.frame_count + 96421u) * f32(sampling::U32_MAX)) + 1u;
-    //        unit.dest = ufrag_coord;
-    //        unit.team = select(1u, 2u, in.uv.y > 0.5);
-    //        out.unit_data = com::pack_unit(unit);
-    //        out.attack_data = vec4(0u);
-    //        return out;
-    //    }
-    //}
+
     // --- Spawn around large ---
-
-
     var large_rng = sampling::hash_noise(ufrag_coord, globals.frame_count + 45245u);
     var team_rng = u32(round(sampling::hash_noise(ufrag_coord, globals.frame_count + 647132u))) + 1u;
     let large_unit_frag_coord = vec2(i32(large_rng * #{LARGE_UNITS_DATA_WIDTH}.0), i32(team_rng - 1u));
@@ -125,14 +108,24 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
         out.attack_data = vec4(0u);
         return out;
     }
-
-    if command.command > 0u && unit.team == 1u && command.unit_group == 1u {
-        unit.dest = command.dest;
-        if unit.mode != com::UNIT_MODE_MOVEING {
-            unit.mode = com::UNIT_MODE_MOVE;
-            unit.progress = 0.0;
+    if unit.team == 1u {
+        if command.command > 0u && command.unit_group == 1u {
+            unit.dest = command.dest;
+            if unit.mode != com::UNIT_MODE_MOVEING {
+                unit.mode = com::UNIT_MODE_MOVE;
+                unit.progress = 0.0;
+            }
+        }
+    } else if unit.team == 2u {
+        var t2upgrades = textureLoad(large_unit_tex, vec2(#{LARGE_UNITS_DATA_WIDTH}u + 1u, 1u), 0);
+        if t2upgrades.y > 0u && t2upgrades.y % 10u == 0u {
+            let large_data = textureLoad(large_unit_tex, vec2(0), 0);
+            var large_unit = com::unpack_large_unit(large_data, vec2<u32>(large_unit_frag_coord));
+            unit.dest = vec2<u32>(large_unit.pos);
         }
     }
+
+        
 
     
     if unit.health > 0u && 
@@ -160,15 +153,15 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
             clear_attack_data = false;
         } else {
             let noise = vec2(
-                sampling::hash_noise(ufrag_coord, globals.frame_count + 45623u),
-                sampling::hash_noise(ufrag_coord, globals.frame_count + 25674u),
+                sampling::hash_noise(ufrag_coord + globals.frame_count, globals.frame_count + 4563u),
+                sampling::hash_noise(ufrag_coord + globals.frame_count, globals.frame_count + 2564u),
             ) * 2.0 - 1.0;
             let attack_offset = clamp(vec2<i32>(noise * #{ATTACK_RADIUS}.0), vec2(-#{ATTACK_RADIUS}), vec2(#{ATTACK_RADIUS}));
             let attack_coord = attack_offset + ifrag_coord;
 
             other_data = textureLoad(data_texture, attack_coord, 0);
             other_unit = com::unpack_unit(other_data);
-            let attack_damage = 1u;
+            let attack_damage = 1u + u32(unit_stats.attack_mult);
 
             if other_unit.id != unit.id && other_unit.health > 0u && other_unit.team > 0u && unit.team != other_unit.team {
                 out.attack_data = vec4(vec2<u32>(attack_offset + #{ATTACK_RADIUS}), attack_damage, 0u);

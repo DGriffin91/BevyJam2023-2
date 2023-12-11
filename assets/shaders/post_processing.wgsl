@@ -42,6 +42,26 @@ fn print_value(
     return select(color, vec4(1.0), mask > 0.0);
 }
 
+
+fn print_value_with_color(
+    frag_coord: vec2<f32>,
+    color: vec4<f32>,
+    print_color: vec4<f32>,
+    row: i32,
+    value: u32,
+) -> vec4<f32> {
+    let row_height = 10.5;
+    let mask = printing::print_value_custom(
+        frag_coord - vec2(0.0, row_height * f32(row) * 2.0),
+        vec2(row_height),
+        vec2(row_height),
+        f32(min(value, 9999995u)), // Rendering past this seems broken
+        0.0,
+        0.0
+    );
+    return select(color, print_color, mask > 0.0);
+}
+
 fn get_scale() -> f32 {
     return max(round(view.viewport.w / 720.0), 1.0);
 }
@@ -93,12 +113,15 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let t2_lost = t2stats.x;
     let t1_credits = t1stats.y / 100u;
 
+    var print_color = vec4(1.0);
     
     let upgrade_movment_cost = u32(sqrt(f32(t1upgrades.x + 1u)));
     let upgrade_attack_cost = u32(sqrt(f32(t1upgrades.y + 1u)));
     let upgrade_spawn_cost = u32(sqrt(f32(t1upgrades.z + 1u)));
-    color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 5, t1hydra.health);
-    color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 6, t2hydra.health);
+    print_color = select(vec4(1.0), vec4(1.0, 0.1, 0.1, 1.0), t1hydra.health < 5000u);
+    color = print_value_with_color(fcoord.xy - vec2(left_align, 21.0), color, print_color, 5, t1hydra.health);
+    print_color = select(vec4(1.0), vec4(1.0, 0.1, 0.1, 1.0), t2hydra.health < 5000u);
+    color = print_value_with_color(fcoord.xy - vec2(left_align, 21.0), color, print_color, 6, t2hydra.health);
     color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 7, t1_alive);
     color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 8, t1_lost);
     color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 9, t2_lost);

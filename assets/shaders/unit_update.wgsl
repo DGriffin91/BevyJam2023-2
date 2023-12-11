@@ -66,7 +66,8 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
 
                 // check team?
                 if attack_damage > 0u && all(read_coord + attack_vector == ifrag_coord) {
-                    unit.health -= attack_damage;
+                    var health = i32(unit.health) - i32(attack_damage);
+                    unit.health = u32(max(health, 0));
                     if unit.health == 0u {
                         var dead_unit = com::unpack_unit(vec4(0u));
                         dead_unit.id = unit.team;

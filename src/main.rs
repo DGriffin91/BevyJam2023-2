@@ -130,9 +130,11 @@ fn setup(
         },
         NotShadowCaster,
     ));
-
+    let mut transform = Transform::from_xyz(246.0, -0.1, 256.0).with_scale(Vec3::splat(0.15));
+    transform.rotate_y(95.0_f32.to_radians());
     commands.spawn(SceneBundle {
-        scene: asset_server.load("models/FlightHelmet/FlightHelmet.gltf#Scene0"),
+        scene: asset_server.load("models/city.glb#Scene0"),
+        transform,
         ..default()
     });
 

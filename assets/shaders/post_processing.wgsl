@@ -111,9 +111,9 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 15, t1upgrades.y);
     color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 16, t1upgrades.z);
 
-    color = print_value(fcoord.xy - vec2(left_align + 50.0, 21.0), color, 14, t2upgrades.x);
-    color = print_value(fcoord.xy - vec2(left_align + 50.0, 21.0), color, 15, t2upgrades.y);
-    color = print_value(fcoord.xy - vec2(left_align + 50.0, 21.0), color, 16, t2upgrades.z);
+    //color = print_value(fcoord.xy - vec2(left_align + 50.0, 21.0), color, 14, t2upgrades.x);
+    //color = print_value(fcoord.xy - vec2(left_align + 50.0, 21.0), color, 15, t2upgrades.y);
+    //color = print_value(fcoord.xy - vec2(left_align + 50.0, 21.0), color, 16, t2upgrades.z);
 
 
     //color = print_value(fcoord.xy - vec2(left_align, 21.0), color, 15, t1upgrades.w);

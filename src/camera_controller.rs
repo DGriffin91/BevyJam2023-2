@@ -152,7 +152,10 @@ fn camera_controller(
 
     // Handle mouse input
     let mut mouse_delta = Vec2::ZERO;
-    if mouse_button_input.pressed(options.mouse_key_enable_mouse) || *move_toggled {
+    if mouse_button_input.pressed(options.mouse_key_enable_mouse) || 
+    // TODO clean up hard coded stuff
+    (mouse_button_input.pressed(MouseButton::Left) && key_input.pressed(KeyCode::ShiftLeft)) || 
+    (mouse_button_input.pressed(MouseButton::Left) && key_input.pressed(KeyCode::ControlLeft)) || *move_toggled {
         for mouse_event in mouse_events.read() {
             mouse_delta += mouse_event.delta;
         }
@@ -178,7 +181,9 @@ fn camera_controller(
                 o.scale *= (1.0 + options.scroll_wheel_speed) * scroll_distance.abs();
             }
             if key_input.pressed(options.click_zoom_modifier)
-                && mouse_button_input.pressed(options.mouse_key_enable_mouse)
+                // TODO clean up hard coded stuff
+                && (mouse_button_input.pressed(options.mouse_key_enable_mouse)
+                    || mouse_button_input.pressed(MouseButton::Left))
             {
                 o.scale *=
                     1.0 + (-mouse_delta.x + mouse_delta.y) * 0.002 * options.click_zoom_speed;

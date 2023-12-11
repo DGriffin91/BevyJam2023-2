@@ -126,7 +126,7 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
         return out;
     }
 
-    if command.command > 0u && unit.team == 1u {
+    if command.command > 0u && unit.team == 1u && command.unit_group == 1u {
         unit.dest = command.dest;
         if unit.mode != com::UNIT_MODE_MOVEING {
             unit.mode = com::UNIT_MODE_MOVE;

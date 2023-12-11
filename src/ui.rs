@@ -5,7 +5,6 @@ use bevy::prelude::*;
 use bevy::sprite::Anchor;
 
 use bevy_picoui::pico::*;
-use bevy_picoui::widgets::button;
 
 use crate::post_process::PostProcessPass;
 use crate::units::UnitCommand;
@@ -97,7 +96,6 @@ fn update(
         text_section(scale, 9.0, "MOVMENT", main_box),
     );
     if pico.clicked(&btn) {
-        dbg!("!!!!!!!!!!");
         unit_command.upgrade_movment_rate();
     }
     let btn = ubutton(

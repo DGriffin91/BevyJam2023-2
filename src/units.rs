@@ -52,7 +52,7 @@ pub struct UnitCommand {
     pub command: u32,
     pub delta_time: f32,
     pub upgrade_request: u32,
-    pub spare1_: u32,
+    pub unit_group: u32,
     pub spare2_: u32,
     pub spare3_: u32,
 }

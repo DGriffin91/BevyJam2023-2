@@ -23,7 +23,10 @@ use bevy::{
 };
 
 use bevy_mod_taa::{TAAPlugin, TAASettings};
-use bevy_picoui::{pico::Pico2dCamera, PicoPlugin};
+use bevy_picoui::{
+    pico::{Pico, Pico2dCamera},
+    PicoPlugin,
+};
 use bevy_ridiculous_ssgi::{ssgi::SSGIPass, SSGIBundle};
 use camera_controller::{OrthoCameraController, OrthoCameraControllerPlugin};
 use minimap::{MinimapPass, MinimapPlugin};
@@ -271,23 +274,44 @@ fn ray_plane_intersection(ray: Ray, plane_point: Vec3, plane_normal: Vec3) -> Op
 }
 
 fn command_units(
+    //mut gizmos: Gizmos,
     mouse_button_input: Res<Input<MouseButton>>,
     window: Query<&Window, With<PrimaryWindow>>,
     cameras: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
     mut unit_command: ResMut<UnitCommand>,
     //mut select_start: Local<Option<Vec3>>,
-    //mut select_end: Local<Option<Vec3>>,
+    key_input: Res<Input<KeyCode>>,
+    mut unit_group: Local<u32>,
+    pico: Res<Pico>,
 ) {
     let window = window.get_single().unwrap();
+
+    if pico.interacting {
+        return;
+    }
+
+    if key_input.pressed(KeyCode::Key1) {
+        *unit_group = 0;
+    }
+    if key_input.pressed(KeyCode::Key2) {
+        *unit_group = 1;
+    }
+    unit_command.unit_group = *unit_group;
+
+    let modifier = key_input.pressed(KeyCode::ShiftLeft) | key_input.pressed(KeyCode::ControlLeft);
+
     if let Some((camera, transform)) = cameras.iter().next() {
-        //dbg!(transform);
-        if mouse_button_input.just_pressed(MouseButton::Right) {
-            let ray = window
-                .cursor_position()
-                .and_then(|cursor_pos| from_screenspace(cursor_pos, camera, transform, window));
-            if let Some(ray) = ray {
-                let intersection =
-                    ray_plane_intersection(ray, vec3(0.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0));
+        let ray = window
+            .cursor_position()
+            .and_then(|cursor_pos| from_screenspace(cursor_pos, camera, transform, window));
+        if let Some(ray) = ray {
+            let intersection =
+                ray_plane_intersection(ray, vec3(0.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0));
+            //dbg!(transform);
+            if !modifier
+                && (mouse_button_input.just_pressed(MouseButton::Right)
+                    || mouse_button_input.just_pressed(MouseButton::Left))
+            {
                 if let Some(intersection) = intersection {
                     if intersection.x > 0.0 && intersection.z > 0.0 {
                         unit_command.dest = uvec2(intersection.x as u32, intersection.z as u32);
@@ -295,6 +319,48 @@ fn command_units(
                     }
                 }
             }
+            /* // Doesn't work naively with board at angle
+            if mouse_button_input.just_pressed(MouseButton::Left) {
+                *select_start = intersection;
+            }
+            if mouse_button_input.pressed(MouseButton::Left) {
+                if let Some(select_end) = intersection {
+                    if let Some(select_start) = *select_start {
+                        let c = Color::rgba(0.0, 1.0, 0.0, 0.1);
+                        gizmos.line(
+                            select_start,
+                            vec3(select_end.x, select_end.y, select_start.z),
+                            c,
+                        );
+                        gizmos.line(
+                            select_start,
+                            vec3(select_start.x, select_end.y, select_end.z),
+                            c,
+                        );
+                        gizmos.line(
+                            select_end,
+                            vec3(select_end.x, select_end.y, select_start.z),
+                            c,
+                        );
+                        gizmos.line(
+                            select_end,
+                            vec3(select_start.x, select_end.y, select_end.z),
+                            c,
+                        );
+                        if mouse_button_input.just_released(MouseButton::Left) {
+                            unit_command.select_region = uvec4(
+                                select_start.x as u32,
+                                select_start.z as u32,
+                                select_end.x as u32,
+                                select_end.z as u32,
+                            )
+                        }
+                    }
+                }
+            } else {
+                *select_start = None;
+            }
+            */
         }
     }
 }

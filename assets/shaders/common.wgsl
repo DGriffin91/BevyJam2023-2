@@ -67,7 +67,7 @@ struct UnitCommand {
     command: u32,
     delta_time: f32,
     upgrade_request: u32,
-    spare1_: u32,
+    unit_group: u32, //1 is hydra, 2 is units
     spare2_: u32,
     spare3_: u32,
 };

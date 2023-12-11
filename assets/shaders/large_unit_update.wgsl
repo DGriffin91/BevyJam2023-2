@@ -113,7 +113,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
         return com::pack_large_unit(unit);
     }
 
-    if command.command > 0u && unit.health > 0u && unit.team == 1u {
+    if command.command > 0u && unit.health > 0u && unit.team == 1u && command.unit_group == 0u {
         unit.dest = vec2<f32>(command.dest);
         if unit.mode != com::UNIT_MODE_MOVEING {
             unit.mode = com::UNIT_MODE_MOVEING;

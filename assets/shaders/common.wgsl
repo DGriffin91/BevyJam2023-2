@@ -165,7 +165,7 @@ struct UnitStats {
 // Why can't I use #{LARGE_UNITS_DATA_WIDTH}u here?
 fn get_unit_stats(large_unit_tex: texture_2d<u32>, ludw: u32, team: u32) -> UnitStats {
     var stats: UnitStats;
-    let team1_buff = select(1.0, 1.3, team == 1u);
+    let team1_buff = select(1.0, 1.4, team == 1u);
     let upgrades = sqrt(vec4<f32>(textureLoad(large_unit_tex, vec2(ludw + 1u, team - 1u), 0) + 1u));
     stats.move_rate = upgrades.x * SPEED_MOVE;
     stats.attack_rate = upgrades.y * SPEED_ATTACK * team1_buff;

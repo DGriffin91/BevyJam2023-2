@@ -60,7 +60,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
     if all(ucoord < minimap_dimensions) {
         // Rotate for player
-        var mapping = vec2(ucoord.x, minimap_dimensions.y - ucoord.y); //view.viewport.y / 720.0
+        var mapping = vec2(minimap_dimensions.x - ucoord.x, minimap_dimensions.y - ucoord.y); //view.viewport.y / 720.0
         color = vec4(vec3(0.0), 1.0);
         let minimap = textureLoad(minimap_texture, mapping, 0);
         let died = minimap.b + minimap.a;

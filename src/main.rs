@@ -80,7 +80,10 @@ fn main() {
             UIPlugin,
         ))
         .add_systems(Startup, (setup, load_unit_texture))
-        .add_systems(Update, (restart_particle_system, command_units))
+        .add_systems(
+            Update,
+            (restart_particle_system, command_units, adjust_spec),
+        )
         .run();
 }
 
@@ -133,7 +136,7 @@ fn setup(
     let mut transform = Transform::from_xyz(246.0, -0.1, 256.0).with_scale(Vec3::splat(0.15));
     transform.rotate_y(95.0_f32.to_radians());
     commands.spawn(SceneBundle {
-        scene: asset_server.load("models/city.glb#Scene0"),
+        scene: asset_server.load("models/city.gltf#Scene0"),
         transform,
         ..default()
     });
@@ -405,3 +408,20 @@ pub fn load_unit_texture(mut commands: Commands, ass: Res<AssetServer>) {
 //        trans.rotation = Quat::from_euler(EulerRot::XYZ, store.x, store.y, store.z);
 //    }
 //}
+
+fn adjust_spec(
+    mut material_events: EventReader<AssetEvent<StandardMaterial>>,
+    mut standard_materials: ResMut<Assets<StandardMaterial>>,
+) {
+    for event in material_events.read() {
+        let handle = match event {
+            AssetEvent::Added { id } => id,
+            AssetEvent::LoadedWithDependencies { id } => id,
+            _ => continue,
+        };
+        if let Some(material) = standard_materials.get_mut(*handle) {
+            // Blender 4.0 doesn't export this
+            material.reflectance = 0.15;
+        }
+    }
+}

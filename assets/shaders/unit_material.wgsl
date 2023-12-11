@@ -137,6 +137,8 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         var large_unit = com::unpack_large_unit(large_data, coord);
         look_dir = com::sign2i(vec2<i32>(large_unit.pos) - idata_xy);
     }
+    
+    
 
     var index = i32(unit.id % 7u);
     // TODO optimize 
@@ -151,6 +153,10 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         index = select(index, 7, all(look_dir == vec2( 1,  1)));
         if unit.mode == com::UNIT_MODE_ATTACK {
             index += 8;
+        }
+        let unit_stats = com::get_unit_stats(large_unit_tex, #{LARGE_UNITS_DATA_WIDTH}u, unit.team);
+        if unit_stats.move_rate > 11.0 && (unit.mode == com::UNIT_MODE_ATTACK || unit.mode == com::UNIT_MODE_MOVEING) {
+            index += 16;
         }
     }
     out.dir_index = index;

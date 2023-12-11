@@ -113,7 +113,7 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
     // -----------------------
 
     // If there is no unit here, return none
-    if unit.health == 0u {
+    if unit.health == 0u || unit.id <= 4u {
         out.unit_data = vec4(0u);
         out.attack_data = vec4(0u);
         return out;
@@ -126,7 +126,8 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
             unit.progress = 0.0;
         }
     }
-
+    
+    var clear_attack_data = true;
     if unit.mode == com::UNIT_MODE_IDLE {
         // First check if the unit we were shooting at is still there and use that one first otherwise find a new one
         let prev_attack_data = textureLoad(prev_attack, ifrag_coord, 0);
@@ -138,6 +139,7 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
         if other_unit.id != unit.id && other_unit.health != 0u && other_unit.team > 0u && unit.team != other_unit.team {
             unit.mode = com::UNIT_MODE_ATTACK;
             unit.progress = 0.0;
+            clear_attack_data = false;
         } else {
             let noise = vec2(
                 sampling::hash_noise(ufrag_coord, globals.frame_count + 45623u),
@@ -154,8 +156,12 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
                 out.attack_data = vec4(vec2<u32>(attack_offset + #{ATTACK_RADIUS}), attack_damage, 0u);
                 unit.mode = com::UNIT_MODE_ATTACK;
                 unit.progress = 0.0;
+                clear_attack_data = false;
             }
         }
+    }
+    if unit.mode != com::UNIT_MODE_ATTACK && clear_attack_data {
+        out.attack_data = vec4(0u);
     }
 
 

@@ -187,6 +187,8 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     let data = bitcast<vec2<u32>>(textureSample(unit_texture, nearest_sampler, uv, u32(in.dir_index)));
     pbr = com::decompress_gbuffer(frag_coord, data.xy);
     
+    //pbr.material.base_color = select(pbr.material.base_color, pbr.material.base_color * vec4(1.0, 0.2, 0.2, 1.0), unit.team == 2u);
+    pbr.material.emissive = select(vec4(0.0, 0.005, 0.0, 0.0), vec4(0.08, 0.0, 0.0, 0.0), unit.team == 2u);
 
     out.deferred = deferred_gbuffer_from_pbr_input(pbr);
     out.deferred_lighting_pass_id = 1u;

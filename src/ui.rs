@@ -5,8 +5,10 @@ use bevy::prelude::*;
 use bevy::sprite::Anchor;
 
 use bevy_picoui::pico::*;
+use bevy_picoui::widgets::button;
 
 use crate::post_process::PostProcessPass;
+use crate::units::UnitCommand;
 
 pub struct UIPlugin;
 
@@ -34,7 +36,12 @@ fn setup_2d_camera(mut commands: Commands) {
         .insert(PostProcessPass);
 }
 
-fn update(_gizmos: Gizmos, mut pico: ResMut<Pico>, windows: Query<&Window>) {
+fn update(
+    _gizmos: Gizmos,
+    mut pico: ResMut<Pico>,
+    windows: Query<&Window>,
+    mut unit_command: ResMut<UnitCommand>,
+) {
     let Some(window) = windows.iter().next() else {
         return;
     };
@@ -51,7 +58,7 @@ fn update(_gizmos: Gizmos, mut pico: ResMut<Pico>, windows: Query<&Window>) {
         depth: Some(0.01),
         x: Val::Px(0.0),
         y: Val::Px(0.0),
-        width: Val::Px(minimap_size + 30.0 * scale),
+        width: Val::Px(minimap_size + 70.0 * scale),
         height: Val::Vh(100.0),
         style: ItemStyle {
             background_color: Color::WHITE * 0.1,
@@ -75,15 +82,56 @@ fn update(_gizmos: Gizmos, mut pico: ResMut<Pico>, windows: Query<&Window>) {
         ..default()
     });
 
-    text_section(&mut pico, scale, 0.0, "GEESE", main_box);
-    text_section(&mut pico, scale, 1.0, "LOST", main_box);
-    text_section(&mut pico, scale, 2.0, "DEFEATED", main_box);
-    text_section(&mut pico, scale, 3.0, "ENEMY GEESE", main_box);
+    pico.add(text_section(scale, 0.0, "GEESE", main_box));
+    pico.add(text_section(scale, 1.0, "LOST", main_box));
+    pico.add(text_section(scale, 2.0, "DEFEATED", main_box));
+    pico.add(text_section(scale, 3.0, "ENEMY GEESE", main_box));
+    pico.add(text_section(scale, 4.0, "CREDITS", main_box));
+    pico.add(text_section(scale, 6.0, "UPGRADES", main_box));
+
+    let btn = ubutton(
+        &mut pico,
+        scale,
+        text_section(scale, 7.0, "MOVMENT", main_box),
+    );
+    if pico.clicked(&btn) {
+        dbg!("!!!!!!!!!!");
+        unit_command.upgrade_movment_rate();
+    }
+    let btn = ubutton(
+        &mut pico,
+        scale,
+        text_section(scale, 8.0, "ATTACK", main_box),
+    );
+    if pico.clicked(&btn) {
+        unit_command.upgrade_attack_rate();
+    }
+    let btn = ubutton(
+        &mut pico,
+        scale,
+        text_section(scale, 9.0, "SPAWN", main_box),
+    );
+    if pico.clicked(&btn) {
+        unit_command.upgrade_spawn_rate();
+    }
 }
 
-fn text_section(pico: &mut Pico, scale: f32, y: f32, text: &str, main_box: ItemIndex) {
-    let y = y * 42.0 + 6.0;
-    pico.add(PicoItem {
+pub fn ubutton(pico: &mut Pico, scale: f32, mut item: PicoItem) -> ItemIndex {
+    item.width = Val::Percent(60.0);
+    item.height = Val::Px(19.0 * scale);
+    let index = pico.add(item);
+    let c = pico.get(&index).style.background_color;
+    pico.get_mut(&index).style.background_color = if pico.hovered(&index) {
+        c + Vec4::splat(0.06)
+    } else {
+        c
+    };
+    index
+}
+
+fn text_section(scale: f32, y: f32, text: &str, main_box: ItemIndex) -> PicoItem {
+    let y = y * 21.0 + 6.0;
+    PicoItem {
         x: Val::Px(6.0 * scale),
         y: Val::Px(y * scale),
         text: String::from(text),
@@ -91,6 +139,7 @@ fn text_section(pico: &mut Pico, scale: f32, y: f32, text: &str, main_box: ItemI
             anchor_text: Anchor::TopLeft,
             font_size: Val::Px(18.0 * scale),
             text_alignment: TextAlignment::Left,
+            background_color: DARK_GRAY,
             ..default()
         },
         anchor: Anchor::TopLeft,
@@ -98,5 +147,12 @@ fn text_section(pico: &mut Pico, scale: f32, y: f32, text: &str, main_box: ItemI
 
         parent: Some(main_box),
         ..default()
-    });
+    }
 }
+
+pub const DARK_GRAY: Color = Color::Rgba {
+    red: 0.2,
+    green: 0.2,
+    blue: 0.2,
+    alpha: 0.5,
+};

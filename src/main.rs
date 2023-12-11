@@ -165,9 +165,10 @@ fn setup(
                     hdr: true,
                     ..default()
                 },
-                transform: cam_rot.with_translation(-cam_rot.forward() * 500.0),
+                //transform: cam_rot.with_translation(-cam_rot.forward() * 500.0),
+                transform: cam_rot.with_translation(vec3(-107.78326, 514.22394, -164.99352)),
                 projection: Projection::Orthographic(OrthographicProjection {
-                    scale: 0.011,
+                    scale: 0.03,
                     far: 2000.0,
                     near: 0.0,
                     ..default()
@@ -279,6 +280,7 @@ fn command_units(
 ) {
     let window = window.get_single().unwrap();
     if let Some((camera, transform)) = cameras.iter().next() {
+        //dbg!(transform);
         if mouse_button_input.just_pressed(MouseButton::Right) {
             let ray = window
                 .cursor_position()

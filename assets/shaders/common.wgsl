@@ -66,6 +66,10 @@ struct UnitCommand {
     dest: vec2<u32>,
     command: u32,
     delta_time: f32,
+    upgrade_request: u32,
+    spare1_: u32,
+    spare2_: u32,
+    spare3_: u32,
 };
 
 struct Unit {
@@ -138,17 +142,39 @@ const UNIT_MODE_MOVE: u32 = 1u;
 const UNIT_MODE_MOVEING: u32 = 2u;
 const UNIT_MODE_ATTACK: u32 = 3u;
 
-const SPEED_MOVE: f32 = 200.0;
-const SPEED_ATTACK: f32 = 5.0;
+const SPEED_MOVE: f32 = 5.0;
+const SPEED_ATTACK: f32 = 1.0;
 const SMALL_UNIT_SIZE: f32 = 1.0;
 
-const LARGE_SPEED_MOVE: f32 = 400.0;
+const LARGE_SPEED_MOVE: f32 = 5.0;
 const LARGE_SPEED_ATTACK: f32 = 1.0;
 const LARGE_UNIT_SIZE: f32 = 4.0;
 
-const SPAWN_RADIUS: f32 = 100.0;
-const SPAWN_RATE: f32 = 100.2;
+const SPAWN_RADIUS: f32 = 8.0;
+const SPAWN_RATE: f32 = 0.6;
 
+struct UnitStats {
+    move_rate: f32,
+    attack_rate: f32,
+    large_move_rate: f32,
+    large_attack_rate: f32,
+    spawn_radius: f32,
+    spawn_rate: f32,
+}
+
+// Why can't I use #{LARGE_UNITS_DATA_WIDTH}u here?
+fn get_unit_stats(large_unit_tex: texture_2d<u32>, ludw: u32, team: u32) -> UnitStats {
+    var stats: UnitStats;
+    let team1_buff = select(1.0, 1.3, team == 1u);
+    let upgrades = sqrt(vec4<f32>(textureLoad(large_unit_tex, vec2(ludw + 1u, team - 1u), 0) + 1u));
+    stats.move_rate = upgrades.x * SPEED_MOVE;
+    stats.attack_rate = upgrades.y * SPEED_ATTACK * team1_buff;
+    stats.large_move_rate = upgrades.x * LARGE_SPEED_MOVE;
+    stats.large_attack_rate = upgrades.y * LARGE_SPEED_ATTACK;
+    stats.spawn_radius = upgrades.z * SPAWN_RADIUS;
+    stats.spawn_rate = upgrades.z * SPAWN_RATE * team1_buff;
+    return stats;
+}
 
 fn unpack_unit(data: vec4<u32>) -> Unit {
     var unit: Unit;

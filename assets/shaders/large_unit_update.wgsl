@@ -12,8 +12,8 @@
 @group(0) @binding(102) var<uniform> command: com::UnitCommand;
 @group(0) @binding(103) var attack_texture: texture_2d<u32>;
 @group(0) @binding(106) var large_unit_tex: texture_2d<u32>;
-@group(0) @binding(107) var minimap_sm_texture: texture_2d<u32>;
-@group(0) @binding(108) var minimap_sm3_texture: texture_2d<u32>;
+@group(0) @binding(108) var minimap_sm_texture: texture_2d<u32>;
+@group(0) @binding(109) var minimap_sm3_texture: texture_2d<u32>;
 
 
 fn get_minimap_sum() -> vec4<u32> {
@@ -36,22 +36,53 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
     let frag_coord = in.position.xy;
     let ufrag_coord = vec2<u32>(frag_coord);
     let ifrag_coord = vec2<i32>(ufrag_coord);
+    
 
     if ufrag_coord.x >= #{LARGE_UNITS_DATA_WIDTH}u {
         var out = vec4(0u);
         // Process players
-        let team = select(1u, 2u, ufrag_coord.y == 1u);
-        if ufrag_coord.x == #{LARGE_UNITS_DATA_WIDTH}u {
-            let prev = textureLoad(large_unit_tex, ifrag_coord, 0);
-            let minimap_sum = get_minimap_sum();
-            out.x = minimap_sum.z + prev.x;
-            out.y = minimap_sum.w + prev.y;
-            // Kill/Death Tracker / Econ
-            //let kills = minimap_sum[team - 1u]
-        } else {
-            // Extra fragment
-
+        let team = select(0u, 1u, ufrag_coord.y == 1u);
+        let other_team = select(1u, 0u, ufrag_coord.y == 1u);
+        var prev_tracker = textureLoad(large_unit_tex, vec2(#{LARGE_UNITS_DATA_WIDTH}u, ufrag_coord.y), 0);
+        var prev_upgrade = textureLoad(large_unit_tex, vec2(#{LARGE_UNITS_DATA_WIDTH}u + 1u, ufrag_coord.y), 0);
+        if ufrag_coord.x == #{LARGE_UNITS_DATA_WIDTH}u + 1u {
+            out = prev_upgrade;
         }
+        var credits = prev_tracker.y;
+        let upgrade_request_movment = (command.upgrade_request & 1u) > 0u || team == 1u; // AI just auto upgrades everything
+        let upgrade_request_attack = (command.upgrade_request & 2u) > 0u || team == 1u;
+        let upgrade_request_spawn = (command.upgrade_request & 4u) > 0u || team == 1u;
+        let upgrade_movment_cost = 100u * u32(sqrt(f32(prev_upgrade.x + 1u)));
+        let upgrade_attack_cost = 100u * u32(sqrt(f32(prev_upgrade.y + 1u)));
+        let upgrade_spawn_cost = 100u * u32(sqrt(f32(prev_upgrade.z + 1u)));
+        if upgrade_request_attack && credits > upgrade_attack_cost {
+            credits -= upgrade_attack_cost;
+            if ufrag_coord.x == #{LARGE_UNITS_DATA_WIDTH}u + 1u {
+                out.y += 1u;
+            }
+        }
+        if upgrade_request_spawn && credits > upgrade_spawn_cost {
+            credits -= upgrade_spawn_cost;
+            if ufrag_coord.x == #{LARGE_UNITS_DATA_WIDTH}u + 1u {
+                out.z += 1u;
+            }
+        }
+        // This is last so AI upgrades spawn and movment first
+        if upgrade_request_movment && credits > upgrade_movment_cost {
+            credits -= upgrade_movment_cost;
+            if ufrag_coord.x == #{LARGE_UNITS_DATA_WIDTH}u + 1u {
+                out.x += 1u;
+            }
+        }
+        if ufrag_coord.x == #{LARGE_UNITS_DATA_WIDTH}u {
+            let minimap_sum = get_minimap_sum(); 
+            // Died tracker
+            out.x = minimap_sum[team + 2u] + prev_tracker.x;
+
+            // Credits tracker
+            out.y = minimap_sum[other_team + 2u] * 3u + credits; 
+            
+        } 
         return out;
     }
 
@@ -61,11 +92,13 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
 
     let data = textureLoad(large_unit_tex, ifrag_coord, 0);
     var unit = com::unpack_large_unit(data, ufrag_coord);
+    let unit_stats = com::get_unit_stats(large_unit_tex, #{LARGE_UNITS_DATA_WIDTH}u, unit.team);
     
 
     // --- Random spawn ---
     let rng = sampling::hash_noise(ufrag_coord + globals.frame_count, globals.frame_count + 34121u);
-    if unit.health == 0u && distance(rng, 0.5) < 0.001 * globals.delta_time {
+    // if unit.health == 0u && distance(rng, 0.5) < 0.001 * globals.delta_time {
+    if unit.health == 0u && ufrag_coord.x == 0u && globals.frame_count < 5000u {
         unit = com::unpack_large_unit(vec4(0u), ufrag_coord);
         unit.health = 255u;
         var spawn = vec2(
@@ -75,8 +108,8 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
         spawn.x *= 0.25;
         spawn.x = select(spawn.x, spawn.x + 0.75, unit.team == 2u);
         spawn *= vec2(#{UNITS_DATA_WIDTH}.0, #{UNITS_DATA_HEIGHT}.0);
-        unit.pos = vec2(2.0);
-        unit.dest = vec2(2.0);
+        unit.pos = select(vec2(256.0, 200.0), vec2(256.0, 300.0), unit.team == 2u);
+        unit.dest = unit.pos;
         return com::pack_large_unit(unit);
     }
 
@@ -91,7 +124,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
     if unit.mode == com::UNIT_MODE_MOVEING {
         // Will look funny at 1000FPS
         if distance(unit.dest, unit.pos) > 0.1 {
-            unit.pos += clamp(normalize(unit.dest - unit.pos), vec2(-1.0), vec2(1.0)) * com::LARGE_SPEED_MOVE * globals.delta_time;
+            unit.pos += clamp(normalize(unit.dest - unit.pos), vec2(-1.0), vec2(1.0)) * unit_stats.large_move_rate * globals.delta_time;
         } else {
             unit.mode = com::UNIT_MODE_IDLE;
         }

@@ -34,6 +34,8 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
 
     let data = textureLoad(data_texture, ifrag_coord, 0);
     var unit = com::unpack_unit(data);
+    
+    let unit_stats = com::get_unit_stats(large_unit_tex, #{LARGE_UNITS_DATA_WIDTH}u, unit.team);
 
     if unit.progress >= 1.0 {
         unit.mode = com::UNIT_MODE_IDLE;
@@ -42,9 +44,9 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
     
     var step_mult = 0.0;
     if unit.mode == com::UNIT_MODE_MOVEING {
-        step_mult = com::SPEED_MOVE;
+        step_mult = unit_stats.move_rate;
     } else if unit.mode == com::UNIT_MODE_ATTACK {
-        step_mult = com::SPEED_ATTACK;
+        step_mult = unit_stats.attack_rate;
     }
     unit.progress += globals.delta_time * step_mult;
 
@@ -67,7 +69,7 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
                 }
             }
         }
-    }        
+    }    
     
     // -----------------------
     //// --- Random spawn ---
@@ -88,19 +90,21 @@ fn fragment(in: FullscreenVertexOutput) -> FragmentOutput {
 
 
     var large_rng = sampling::hash_noise(ufrag_coord, globals.frame_count + 45245u);
-    var team_rng = i32(round(sampling::hash_noise(ufrag_coord, globals.frame_count + 647132u)));
-    let large_unit_frag_coord = vec2(i32(large_rng * #{LARGE_UNITS_DATA_WIDTH}.0), team_rng);
+    var team_rng = u32(round(sampling::hash_noise(ufrag_coord, globals.frame_count + 647132u))) + 1u;
+    let large_unit_frag_coord = vec2(i32(large_rng * #{LARGE_UNITS_DATA_WIDTH}.0), i32(team_rng - 1u));
     let large_data = textureLoad(large_unit_tex, large_unit_frag_coord, 0);
     var large_unit = com::unpack_large_unit(large_data, vec2<u32>(large_unit_frag_coord));
 
+    let spawn_unit_stats = com::get_unit_stats(large_unit_tex, #{LARGE_UNITS_DATA_WIDTH}u, team_rng);
+
     let rng = sampling::hash_noise(ufrag_coord + globals.frame_count, globals.frame_count + 34121u);
-    if large_unit.health > 0u && distance(large_unit.pos.xy, frag_coord.xy) < com::SPAWN_RADIUS {
-        if unit.health == 0u && distance(rng, 0.5) < com::SPAWN_RATE * globals.delta_time { 
+    if large_unit.health > 0u && distance(large_unit.pos.xy, frag_coord.xy) < spawn_unit_stats.spawn_radius {
+        if unit.health == 0u && distance(rng, 0.5) < spawn_unit_stats.spawn_rate * globals.delta_time { 
             unit = com::unpack_unit(vec4(0u));
             unit.health = 255u;
             unit.id = u32(sampling::hash_noise(ufrag_coord, globals.frame_count + 96421u) * f32(sampling::U32_MAX - 10u)) + 5u;
             unit.dest = ufrag_coord;
-            unit.team = u32(team_rng) + 1u;
+            unit.team = team_rng;
             out.unit_data = com::pack_unit(unit);
             out.attack_data = vec4(0u);
             return out;

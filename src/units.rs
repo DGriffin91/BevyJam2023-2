@@ -51,6 +51,22 @@ pub struct UnitCommand {
     pub dest: UVec2,
     pub command: u32,
     pub delta_time: f32,
+    pub upgrade_request: u32,
+    pub spare1_: u32,
+    pub spare2_: u32,
+    pub spare3_: u32,
+}
+
+impl UnitCommand {
+    pub fn upgrade_movment_rate(&mut self) {
+        self.upgrade_request |= 1;
+    }
+    pub fn upgrade_attack_rate(&mut self) {
+        self.upgrade_request |= 1 << 1;
+    }
+    pub fn upgrade_spawn_rate(&mut self) {
+        self.upgrade_request |= 1 << 2;
+    }
 }
 
 pub struct UnitsPlugin;

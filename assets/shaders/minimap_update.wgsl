@@ -26,16 +26,16 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<u32> {
             var unit = com::unpack_unit(data);
             if unit.health > 0u && unit.id > 0u {
                 if unit.team == 1u {
-                    out.x += 1u;
+                    out.x += 1u; // team 1 unit count
                 } else if unit.team == 2u {
-                    out.y += 1u;
+                    out.y += 1u; // team 2 unit count
                 }
             }
             if unit.health == 0u && unit.id > 0u {
                 if unit.id == 1u {
-                    out.z += 1u;
+                    out.z += 1u; // team 1 units died this round
                 } else if unit.id == 2u {
-                    out.w += 1u;
+                    out.w += 1u; // team 2 units died this round
                 }
             }
 
